@@ -1,26 +1,135 @@
-@import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+* {
+  box-sizing: border-box;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
+  margin: 0;
+  padding: 0;
+  background: #0a0a0f;
+  color: #f3f3f7;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 270px 1fr 360px;
+  min-height: 100vh;
+}
+
+.sidebar,
+.notebook {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sidebar {
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.notebook {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 14px;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.npc-button {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: white;
+  cursor: pointer;
+}
+
+.npc-button.active {
+  outline: 2px solid rgba(255,255,255,0.28);
+}
+
+.chat-log {
+  height: 52vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.msg {
+  padding: 12px;
+  border-radius: 12px;
+  max-width: 80%;
+  white-space: pre-wrap;
+}
+
+.msg.user {
+  align-self: flex-end;
+  background: rgba(125, 110, 255, 0.18);
+}
+
+.msg.npc {
+  align-self: flex-start;
+  background: rgba(255,255,255,0.07);
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+}
+
+.input {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.06);
+  color: white;
+  padding: 12px;
+}
+
+.action-button {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  background: white;
+  color: black;
+  font-weight: 600;
+}
+
+.small {
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+ul {
+  padding-left: 18px;
 }
