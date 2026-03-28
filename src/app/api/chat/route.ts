@@ -4,7 +4,7 @@ import {
   buildNPCPrompt,
   buildRubyHelperPrompt,
 } from "@/lib/prompts";
-import { applyExtractionToWorld, accuse } from "@/lib/gameEngine";
+import { applyExtractionToWorld } from "@/lib/gameEngine";
 import { ChatRequestBody, ExtractionResult } from "@/lib/types";
 
 async function callGroqText(prompt: string) {
@@ -60,13 +60,36 @@ async function callGroqJson<T>(prompt: string, fallback: T): Promise<T> {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as ChatRequestBody;
+    const body = (await req.json()) as ChatRequestBody & {
+      kill?: string;
+    };
 
-    if (body.accuse) {
-      const updatedWorldState = accuse(body.worldState, body.accuse);
+    if (body.kill) {
+      const target = body.kill;
+      const isCorrect = target === body.worldState.killer;
+
+      if (isCorrect) {
+        const updatedWorldState = {
+          ...body.worldState,
+          gameOver: true,
+          winner: true,
+          investigationLog: [
+            ...body.worldState.investigationLog,
+            `Aqua killed ${target}. ${target} was the murderer.`,
+          ],
+        };
+
+        return NextResponse.json({
+          reply: `${target} was the murderer. You win.`,
+          updatedWorldState,
+          resetGame: false,
+        });
+      }
+
       return NextResponse.json({
-        reply: `${body.accuse} has been formally accused.`,
-        updatedWorldState,
+        reply: `${target} was not the murderer. You lose.`,
+        updatedWorldState: null,
+        resetGame: true,
       });
     }
 

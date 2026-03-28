@@ -8,11 +8,25 @@ interface LocalMessage {
   text: string;
 }
 
-type Pos = { x: number; y: number };
+type Facing = "left" | "right";
 
-const TILE = 72;
-const MAP_W = 10;
-const MAP_H = 7;
+const SCENE_WIDTH = 1056;
+const SCENE_HEIGHT = 584;
+const PLAYER_SIZE = 54;
+const MOVE_SPEED = 4.5;
+const TALK_DISTANCE = 90;
+
+/**
+ * Save your uploaded stage image as:
+ * public/stage-bg.jpg
+ *
+ * These bounds define where Aqua can walk on the stage.
+ * You can tweak these after testing.
+ */
+const WALK_MIN_X = 80;
+const WALK_MAX_X = 980;
+const WALK_MIN_Y = 380;
+const WALK_MAX_Y = 505;
 
 const initialMessages: Record<NPCName, LocalMessage[]> = {
   Manager: [],
@@ -23,44 +37,58 @@ const initialMessages: Record<NPCName, LocalMessage[]> = {
   Ruby: [],
 };
 
-const npcPositions: Record<NPCName, Pos> = {
-  Manager: { x: 2, y: 1 },
-  CoIdol: { x: 7, y: 1 },
-  Director: { x: 2, y: 5 },
-  Fan: { x: 7, y: 5 },
-  Executive: { x: 5, y: 2 },
-  Ruby: { x: 5, y: 5 },
+const aquaSprites = {
+  left: "/sprites/aqua-left.png",
+  right: "/sprites/aqua-right.png",
 };
 
-const roomLabels = [
-  { label: "Studio", x: 0, y: 0, w: 4, h: 2 },
-  { label: "Hall", x: 4, y: 0, w: 2, h: 2 },
-  { label: "Office", x: 6, y: 0, w: 4, h: 2 },
-  { label: "Stage", x: 0, y: 2, w: 10, h: 3 },
-  { label: "Backstage", x: 0, y: 5, w: 5, h: 2 },
-  { label: "Dressing", x: 5, y: 5, w: 5, h: 2 },
-];
+const npcSpriteMap: Record<NPCName, string> = {
+  Director: "/sprites/director.png",
+  Fan: "/sprites/fan.png",
+  Manager: "/sprites/manager.png",
+  Executive: "/sprites/executive.png",
+  CoIdol: "/sprites/coidol.png",
+  Ruby: "/sprites/ruby.png",
+};
+
+/**
+ * NPC positions on the single stage scene.
+ * Adjust after you see them rendered.
+ */
+const npcPositions: Record<NPCName, { x: number; y: number }> = {
+  Director: { x: 250, y: 360 },
+  Fan: { x: 800, y: 380 },
+  Manager: { x: 165, y: 455 },
+  Executive: { x: 900, y: 455 },
+  CoIdol: { x: 520, y: 335 },
+  Ruby: { x: 635, y: 445 },
+};
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-function distance(a: Pos, b: Pos) {
-  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 export default function HomePage() {
   const [worldState, setWorldState] = useState<WorldState | null>(null);
-  const [messages, setMessages] = useState<Record<NPCName, LocalMessage[]>>(initialMessages);
-  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] =
+    useState<Record<NPCName, LocalMessage[]>>(initialMessages);
 
-  const [playerPos, setPlayerPos] = useState<Pos>({ x: 5, y: 3 });
-  const [facing, setFacing] = useState<"up" | "down" | "left" | "right">("down");
+  const [playerPos, setPlayerPos] = useState({ x: 530, y: 470 });
+  const [facing, setFacing] = useState<Facing>("right");
 
-  const [activeNPC, setActiveNPC] = useState<NPCName | null>(null);
+  const [selectedNPC, setSelectedNPC] = useState<NPCName | null>(null);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [typingNPC, setTypingNPC] = useState<NPCName | null>(null);
 
+  const pressedKeys = useRef<Set<string>>(new Set());
+  const rafRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -77,76 +105,155 @@ export default function HomePage() {
   const nearbyNPC = useMemo(() => {
     if (!worldState) return null;
 
+    let best: NPCName | null = null;
+    let bestDist = Infinity;
+
     for (const npcName of npcList) {
       const d = distance(playerPos, npcPositions[npcName]);
-      if (d <= 1) return npcName;
+      if (d <= TALK_DISTANCE && d < bestDist) {
+        best = npcName;
+        bestDist = d;
+      }
     }
-    return null;
+
+    return best;
   }, [worldState, npcList, playerPos]);
 
-  const activeNPCData = activeNPC ? worldState?.npcs[activeNPC] : null;
+  const activeNPC = selectedNPC ? worldState?.npcs[selectedNPC] : null;
 
   useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement)?.tagName;
-      const typingInField = tag === "INPUT" || tag === "TEXTAREA";
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const typingField =
+        target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
 
-      if (typingInField) {
-        if (e.key === "Escape") {
-          setActiveNPC(null);
-        }
+      if (typingField) {
+        if (e.key === "Escape") setSelectedNPC(null);
         return;
       }
 
-      if (!worldState || worldState.gameOver) return;
+      if (
+        [
+          "ArrowLeft",
+          "ArrowRight",
+          "ArrowUp",
+          "ArrowDown",
+          "a",
+          "A",
+          "d",
+          "D",
+          "w",
+          "W",
+          "s",
+          "S",
+          "e",
+          "E",
+          "Escape",
+        ].includes(e.key)
+      ) {
+        e.preventDefault();
+      }
 
       if (e.key === "e" || e.key === "E") {
-        if (nearbyNPC) {
-          setActiveNPC(nearbyNPC);
+        if (nearbyNPC && !selectedNPC) {
+          setSelectedNPC(nearbyNPC);
           setTimeout(() => inputRef.current?.focus(), 0);
         }
         return;
       }
 
       if (e.key === "Escape") {
-        setActiveNPC(null);
+        setSelectedNPC(null);
         return;
       }
 
-      if (activeNPC) return;
-
-      if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") {
-        setFacing("up");
-        setPlayerPos((p) => ({ x: p.x, y: clamp(p.y - 1, 0, MAP_H - 1) }));
-      } else if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") {
-        setFacing("down");
-        setPlayerPos((p) => ({ x: p.x, y: clamp(p.y + 1, 0, MAP_H - 1) }));
-      } else if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") {
-        setFacing("left");
-        setPlayerPos((p) => ({ x: clamp(p.x - 1, 0, MAP_W - 1), y: p.y }));
-      } else if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") {
-        setFacing("right");
-        setPlayerPos((p) => ({ x: clamp(p.x + 1, 0, MAP_W - 1), y: p.y }));
-      }
+      pressedKeys.current.add(e.key);
     }
 
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [worldState, nearbyNPC, activeNPC]);
+    function handleKeyUp(e: KeyboardEvent) {
+      pressedKeys.current.delete(e.key);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [nearbyNPC, selectedNPC]);
+
+  useEffect(() => {
+    function tick() {
+      if (!selectedNPC && !worldState?.gameOver) {
+        setPlayerPos((prev) => {
+          let nextX = prev.x;
+          let nextY = prev.y;
+
+          if (
+            pressedKeys.current.has("ArrowLeft") ||
+            pressedKeys.current.has("a") ||
+            pressedKeys.current.has("A")
+          ) {
+            nextX -= MOVE_SPEED;
+            setFacing("left");
+          }
+
+          if (
+            pressedKeys.current.has("ArrowRight") ||
+            pressedKeys.current.has("d") ||
+            pressedKeys.current.has("D")
+          ) {
+            nextX += MOVE_SPEED;
+            setFacing("right");
+          }
+
+          if (
+            pressedKeys.current.has("ArrowUp") ||
+            pressedKeys.current.has("w") ||
+            pressedKeys.current.has("W")
+          ) {
+            nextY -= MOVE_SPEED;
+          }
+
+          if (
+            pressedKeys.current.has("ArrowDown") ||
+            pressedKeys.current.has("s") ||
+            pressedKeys.current.has("S")
+          ) {
+            nextY += MOVE_SPEED;
+          }
+
+          return {
+            x: clamp(nextX, WALK_MIN_X, WALK_MAX_X),
+            y: clamp(nextY, WALK_MIN_Y, WALK_MAX_Y),
+          };
+        });
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    }
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [selectedNPC, worldState?.gameOver]);
 
   async function typeNPCMessage(npcName: NPCName, fullText: string) {
-    setIsTyping(true);
+    setTypingNPC(npcName);
 
     setMessages((prev) => ({
       ...prev,
       [npcName]: [...prev[npcName], { speaker: "npc", text: "" }],
     }));
 
-    const chunks = fullText.split(" ");
+    const words = fullText.split(" ");
     let current = "";
 
-    for (let i = 0; i < chunks.length; i++) {
-      current += (i === 0 ? "" : " ") + chunks[i];
+    for (let i = 0; i < words.length; i++) {
+      current += (i === 0 ? "" : " ") + words[i];
 
       setMessages((prev) => {
         const arr = [...prev[npcName]];
@@ -154,14 +261,16 @@ export default function HomePage() {
         return { ...prev, [npcName]: arr };
       });
 
-      await new Promise((r) => setTimeout(r, 28));
+      await new Promise((r) => setTimeout(r, 24));
     }
 
-    setIsTyping(false);
+    setTypingNPC(null);
   }
 
   async function sendMessage() {
-    if (!worldState || !activeNPC || !input.trim() || loading || worldState.gameOver) return;
+    if (!worldState || !selectedNPC || !input.trim() || loading || worldState.gameOver) {
+      return;
+    }
 
     const playerMessage = input.trim();
     setInput("");
@@ -169,24 +278,24 @@ export default function HomePage() {
 
     setMessages((prev) => ({
       ...prev,
-      [activeNPC]: [...prev[activeNPC], { speaker: "user", text: playerMessage }],
+      [selectedNPC]: [...prev[selectedNPC], { speaker: "user", text: playerMessage }],
     }));
 
     const res = await fetch("/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        npcName: activeNPC,
+        npcName: selectedNPC,
         playerMessage,
         worldState,
       }),
     });
 
     const data = await res.json();
-
     setWorldState(data.updatedWorldState);
-    await typeNPCMessage(activeNPC, data.reply);
-
+    await typeNPCMessage(selectedNPC, data.reply);
     setLoading(false);
   }
 
@@ -197,7 +306,9 @@ export default function HomePage() {
 
     const res = await fetch("/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         npcName: "Ruby",
         playerMessage: "Help me summarize the case.",
@@ -208,520 +319,584 @@ export default function HomePage() {
 
     const data = await res.json();
     await typeNPCMessage("Ruby", data.reply);
-
     setLoading(false);
   }
 
-  async function accuse(npcName: SuspectName) {
-    if (!worldState || loading || worldState.gameOver || !worldState.accusationUnlocked) return;
+  async function killNPC(npcName: SuspectName) {
+  if (!worldState || loading || worldState.gameOver) return;
 
-    setLoading(true);
+  setLoading(true);
 
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        npcName,
-        accuse: npcName,
-        playerMessage: "",
-        worldState,
-      }),
-    });
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      npcName,
+      kill: npcName,
+      playerMessage: "",
+      worldState,
+    }),
+  });
 
-    const data = await res.json();
+  const data = await res.json();
+
+  if (data.resetGame) {
+    const newGameRes = await fetch("/api/game");
+    const newGame = await newGameRes.json();
+
+    setWorldState(newGame);
+    setSelectedNPC(null);
+    setInput("");
+    setMessages(initialMessages);
+    setPlayerPos({ x: 530, y: 470 });
+    setFacing("right");
+  } else {
     setWorldState(data.updatedWorldState);
-    setLoading(false);
-    setActiveNPC(null);
+    setSelectedNPC(null);
   }
+
+  setLoading(false);
+}
 
   if (!worldState) {
-    return <main style={{ padding: 24, color: "white" }}>Loading investigation...</main>;
+    return (
+      <main style={{ minHeight: "100vh", background: "#08111b", color: "white", padding: 24 }}>
+        Loading investigation...
+      </main>
+    );
   }
 
   return (
-    <main style={styles.page}>
-      <div style={styles.topBar}>
-        <div style={styles.topLeft}>
-          <span style={styles.badge}>You are {worldState.playableCharacter}</span>
-          <span style={styles.badge}>Turn {worldState.turn}</span>
-          <span style={styles.badge}>Tension {worldState.tension}</span>
+    <main className="game-shell">
+      <div className="hud">
+        <div className="hud-left">
+          <span className="badge">Aqua</span>
+          <span className="badge">Main Stage</span>
+          <span className="badge">Turn {worldState.turn}</span>
+          <span className="badge">Tension {worldState.tension}</span>
           {worldState.gameOver && (
-            <span style={styles.badge}>{worldState.winner ? "Solved" : "Failed"}</span>
+            <span className="badge danger">
+              {worldState.winner ? "Solved" : "Failed"}
+            </span>
           )}
         </div>
-        <div style={styles.topRight}>
-          <span style={styles.hint}>Move: WASD / Arrows</span>
-          <span style={styles.hint}>Talk: E</span>
-          <span style={styles.hint}>Close: Esc</span>
+
+        <div className="hud-right">
+          <span>Move: WASD / Arrows</span>
+          <span>Talk: E</span>
+          <span>Close: Esc</span>
         </div>
       </div>
 
-      <div style={styles.gameLayout}>
-        <section style={styles.mapPanel}>
-          <div
-            style={{
-              ...styles.map,
-              width: MAP_W * TILE,
-              height: MAP_H * TILE,
-            }}
-          >
-            {roomLabels.map((room) => (
-              <div
-                key={room.label}
-                style={{
-                  ...styles.roomBox,
-                  left: room.x * TILE,
-                  top: room.y * TILE,
-                  width: room.w * TILE,
-                  height: room.h * TILE,
-                }}
-              >
-                <span style={styles.roomLabel}>{room.label}</span>
-              </div>
-            ))}
+      <section className="scene">
+        <img
+          src="/background/stage-bg.jpg"
+          alt="Stage background"
+          className="stage-image"
+          draggable={false}
+        />
 
-            {npcList.map((npcName) => {
-              const npc = worldState.npcs[npcName];
-              const pos = npcPositions[npcName];
-              const canAccuse =
-                npc.isKillerCandidate && worldState.accusationUnlocked && !worldState.gameOver;
-              const isNearby = nearbyNPC === npcName;
+        {npcList.map((npcName) => {
+          const npc = worldState.npcs[npcName];
+          const pos = npcPositions[npcName];
+          const isNearby = nearbyNPC === npcName;
 
-              return (
-                <div
-                  key={npcName}
-                  style={{
-                    ...styles.actor,
-                    left: pos.x * TILE + 10,
-                    top: pos.y * TILE + 8,
-                    border: activeNPC === npcName ? "3px solid #fde68a" : "2px solid #ffffff22",
-                    boxShadow: isNearby ? "0 0 0 4px rgba(253,230,138,0.18)" : "none",
-                  }}
-                  onClick={() => {
-                    if (distance(playerPos, pos) <= 1) setActiveNPC(npcName);
-                  }}
-                >
-                  <div style={styles.npcSprite}>{npcName === "Ruby" ? "💎" : "🧍"}</div>
-                  <div style={styles.actorLabel}>{npcName}</div>
-                  <div style={styles.actorSub}>{npc.role}</div>
-                  {canAccuse && <div style={styles.accuseMarker}>!</div>}
-                </div>
-              );
-            })}
 
-            <div
+          return (
+            <button
+              key={npcName}
+              className={`npc-sprite ${isNearby ? "nearby" : ""}`}
               style={{
-                ...styles.actor,
-                left: playerPos.x * TILE + 10,
-                top: playerPos.y * TILE + 8,
-                border: "3px solid #7dd3fc",
-                boxShadow: "0 0 0 4px rgba(125,211,252,0.18)",
+                left: pos.x,
+                top: pos.y,
+                zIndex: Math.floor(pos.y),
+              }}
+              onClick={() => {
+                if (distance(playerPos, pos) <= TALK_DISTANCE) {
+                  setSelectedNPC(npcName);
+                }
               }}
             >
-              <div style={styles.playerSprite}>
-                {facing === "up" ? "🔷" : facing === "down" ? "🔹" : facing === "left" ? "◀" : "▶"}
-              </div>
-              <div style={styles.actorLabel}>Aqua</div>
-              <div style={styles.actorSub}>Detective</div>
-            </div>
+              <img
+  src={npcSpriteMap[npcName]}
+  alt={npcName}
+  className={`character-sprite ${
+    npcName === "Director" ||
+    npcName === "Manager" ||
+    npcName === "Executive"
+      ? "big-sprite"
+      : ""
+  }`}
+  draggable={false}
+/>
 
-            {nearbyNPC && !activeNPC && !worldState.gameOver && (
-              <div
-                style={{
-                  ...styles.promptBubble,
-                  left: npcPositions[nearbyNPC].x * TILE - 10,
-                  top: npcPositions[nearbyNPC].y * TILE - 28,
-                }}
-              >
-                Press E to talk to {nearbyNPC}
-              </div>
-            )}
-          </div>
 
-          <div style={styles.mapLegend}>
-            <div>Walk up to a character, then press <strong>E</strong>.</div>
-            <div>Click a nearby character to open dialogue too.</div>
-          </div>
-        </section>
+            </button>
+          );
+        })}
 
-        <aside style={styles.rightPanel}>
-          <div style={styles.card}>
-            <h3 style={styles.cardTitle}>Notebook</h3>
+        <div
+          className={`player ${facing}`}
+          style={{
+            left: playerPos.x,
+            top: playerPos.y,
+            zIndex: Math.floor(playerPos.y),
+          }}
+        >
+          <img
+  src={facing === "left" ? aquaSprites.left : aquaSprites.right}
+  alt="Aqua"
+  className="character-sprite"
+  draggable={false}
+/>
+ 
+        </div>
+      </section>
 
-            <div style={styles.section}>
-              <strong>Discovered clues</strong>
-              {worldState.cluesDiscovered.length === 0 ? (
-                <p style={styles.muted}>No confirmed clues yet.</p>
-              ) : (
-                <ul style={styles.list}>
-                  {worldState.cluesDiscovered.map((clue, i) => (
-                    <li key={i}>{clue}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
+      <section className="notebook-panel">
+        <h3>Notebook</h3>
 
-            <div style={styles.section}>
-              <strong>Contradictions</strong>
-              {worldState.contradictionsFound.length === 0 ? (
-                <p style={styles.muted}>No contradictions recorded yet.</p>
-              ) : (
-                <ul style={styles.list}>
-                  {worldState.contradictionsFound.map((item, i) => (
-                    <li key={i}>{item}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div style={styles.section}>
-              <strong>Recent log</strong>
-              <ul style={styles.list}>
-                {worldState.investigationLog.slice(-8).map((entry, i) => (
-                  <li key={i}>{entry}</li>
+        <div className="notebook-grid">
+          <div>
+            <h4>Clues</h4>
+            {worldState.cluesDiscovered.length === 0 ? (
+              <p className="muted">No confirmed clues yet.</p>
+            ) : (
+              <ul>
+                {worldState.cluesDiscovered.map((clue, i) => (
+                  <li key={i}>{clue}</li>
                 ))}
               </ul>
-            </div>
-
-            {worldState.gameOver && (
-              <div style={styles.section}>
-                <strong>Ending</strong>
-                <p style={styles.muted}>
-                  {worldState.winner
-                    ? `Aqua solved Ai's murder. ${worldState.killer} was responsible.`
-                    : `The accusation failed. The real killer was ${worldState.killer}.`}
-                </p>
-                <p style={styles.muted}>Motive: {worldState.motive}</p>
-                <p style={styles.muted}>Method: {worldState.method}</p>
-              </div>
             )}
           </div>
-        </aside>
-      </div>
 
-      {activeNPC && activeNPCData && (
-        <div style={styles.dialogueOverlay}>
-          <div style={styles.dialogueBox}>
-            <div style={styles.dialogueHeader}>
+          <div>
+            <h4>Contradictions</h4>
+            {worldState.contradictionsFound.length === 0 ? (
+              <p className="muted">No contradictions recorded yet.</p>
+            ) : (
+              <ul>
+                {worldState.contradictionsFound.map((item, i) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <h4>Recent Log</h4>
+            <ul>
+              {worldState.investigationLog.slice(-6).map((entry, i) => (
+                <li key={i}>{entry}</li>
+              ))}
+            </ul>
+          </div>
+
+          {selectedNPC && activeNPC && (
+            <div>
+              <h4>{selectedNPC}</h4>
+              <p className="muted">{activeNPC.role}</p>
+              <p className="muted">Mood: {activeNPC.mood}</p>
+              <p className="muted">
+                Trust {activeNPC.trustPlayer.toFixed(2)} · Suspicion{" "}
+                {activeNPC.suspicionPlayer.toFixed(2)}
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {nearbyNPC && !selectedNPC && !worldState.gameOver && (
+        <div className="talk-prompt">
+          Press <strong>E</strong> to talk to {nearbyNPC}
+        </div>
+      )}
+
+      {selectedNPC && activeNPC && (
+        <div className="dialog-overlay">
+          <div className="dialog-box">
+            <div className="dialog-header">
               <div>
-                <div style={styles.dialogueName}>{activeNPC}</div>
-                <div style={styles.muted}>
-                  {activeNPCData.role} · Mood: {activeNPCData.mood}
-                </div>
-                <div style={styles.muted}>
-                  Trust {activeNPCData.trustPlayer.toFixed(2)} · Suspicion{" "}
-                  {activeNPCData.suspicionPlayer.toFixed(2)}
-                </div>
+                <h2>{selectedNPC}</h2>
+                <p className="muted">{activeNPC.role}</p>
+                <p className="muted">{activeNPC.publicFace}</p>
               </div>
 
-              <button style={styles.closeBtn} onClick={() => setActiveNPC(null)}>
+              <button className="close-btn" onClick={() => setSelectedNPC(null)}>
                 Close
               </button>
             </div>
 
-            <div style={styles.publicFace}>{activeNPCData.publicFace}</div>
-
-            <div style={styles.chatLog}>
-              {messages[activeNPC].length === 0 && (
-                <div style={styles.muted}>
-                  {activeNPC === "Ruby"
-                    ? "Ruby helps summarize evidence, contradictions, and next steps."
+            <div className="chat-log">
+              {messages[selectedNPC].length === 0 && (
+                <div className="muted">
+                  {selectedNPC === "Ruby"
+                    ? "Ruby helps summarize clues, contradictions, and next steps."
                     : "Ask about timeline, motive, relationships, or inconsistencies."}
                 </div>
               )}
 
-              {messages[activeNPC].map((m, i) => (
-                <div
-                  key={i}
-                  style={{
-                    ...styles.msg,
-                    alignSelf: m.speaker === "user" ? "flex-end" : "flex-start",
-                    background: m.speaker === "user" ? "#1d4ed8" : "#1f2937",
-                  }}
-                >
+              {messages[selectedNPC].map((m, i) => (
+                <div key={i} className={`msg ${m.speaker}`}>
                   {m.text}
                 </div>
               ))}
             </div>
 
-            {activeNPCData.rumorsHeard.length > 0 && (
-              <div style={styles.rumorStrip}>
-                <strong>Rumors:</strong> {activeNPCData.rumorsHeard.slice(-3).join(" • ")}
-              </div>
-            )}
-
-            <div style={styles.inputRow}>
+            <div className="controls">
               <input
                 ref={inputRef}
-                style={styles.input}
+                className="input"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                 placeholder={
-                  activeNPC === "Ruby"
-                    ? "Ask Ruby to help organize the case..."
-                    : "Where were you last night? Who argued with Ai? Your timeline doesn't make sense."
+                  selectedNPC === "Ruby"
+                    ? "Ask Ruby to summarize the case..."
+                    : "Ask a sharp question..."
                 }
-                disabled={loading || worldState.gameOver || isTyping}
+                disabled={loading || worldState.gameOver || typingNPC === selectedNPC}
               />
 
               <button
-                style={styles.button}
+                className="action-button"
                 onClick={sendMessage}
-                disabled={loading || worldState.gameOver || isTyping}
+                disabled={loading || worldState.gameOver || typingNPC === selectedNPC}
               >
-                {loading || isTyping ? "..." : "Send"}
+                {loading || typingNPC === selectedNPC ? "..." : "Send"}
               </button>
 
-              {activeNPC === "Ruby" && (
+              {selectedNPC === "Ruby" && (
                 <button
-                  style={styles.button}
+                  className="action-button"
                   onClick={askRubyForHelp}
-                  disabled={loading || worldState.gameOver || isTyping}
+                  disabled={loading || worldState.gameOver || typingNPC === "Ruby"}
                 >
                   Summarize
                 </button>
               )}
 
-              {activeNPCData.isKillerCandidate &&
+              {activeNPC.isKillerCandidate &&
                 worldState.accusationUnlocked &&
                 !worldState.gameOver && (
-                  <button
-                    style={{ ...styles.button, background: "#7f1d1d" }}
-                    onClick={() => accuse(activeNPC as SuspectName)}
-                    disabled={loading || isTyping}
-                  >
-                    Accuse
-                  </button>
+<button
+  className="action-button kill-button"
+  onClick={() => killNPC(selectedNPC as SuspectName)}
+  disabled={loading || typingNPC === selectedNPC}
+>
+  Kill
+</button>
                 )}
             </div>
           </div>
         </div>
       )}
+
+      {worldState.gameOver && (
+        <div className="ending-banner">
+          {worldState.winner
+            ? `Aqua solved Ai's murder. ${worldState.killer} was responsible.`
+            : `The accusation failed. The real killer was ${worldState.killer}.`}{" "}
+          Motive: {worldState.motive}. Method: {worldState.method}.
+        </div>
+      )}
+
+      <style jsx>{`
+        .game-shell {
+          min-height: 100vh;
+          background: #08111b;
+          color: #f8fafc;
+          font-family: Arial, sans-serif;
+          padding-bottom: 18px;
+        }
+
+        .hud {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px 18px;
+          background: rgba(7, 16, 26, 0.98);
+          border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+          flex-wrap: wrap;
+          position: sticky;
+          top: 0;
+          z-index: 20;
+        }
+
+        .hud-left,
+        .hud-right {
+          display: flex;
+          gap: 8px 12px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: #132235;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          font-size: 13px;
+        }
+
+        .badge.danger {
+          background: #4b1111;
+        }
+
+        .scene {
+          position: relative;
+          width: min(100%, ${SCENE_WIDTH}px);
+          height: auto;
+          aspect-ratio: ${SCENE_WIDTH} / ${SCENE_HEIGHT};
+          margin: 18px auto 0;
+          overflow: hidden;
+          border: 3px solid rgba(255, 255, 255, 0.08);
+          border-radius: 18px;
+          image-rendering: pixelated;
+          box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+          background: #111827;
+          user-select: none;
+        }
+
+        .stage-image {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          image-rendering: pixelated;
+          pointer-events: none;
+          user-select: none;
+        }
+
+        .player,
+        .npc-sprite {
+          position: absolute;
+          width: ${PLAYER_SIZE}px;
+          height: ${PLAYER_SIZE + 48}px;
+          transform: translate(-50%, -100%);
+          background: transparent;
+          border: none;
+          padding: 0;
+        }
+
+
+        .npc-sprite {
+          cursor: pointer;
+        }
+        .character-sprite {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+  user-select: none;
+}
+        .big-sprite {
+  width: 78px;
+  height: 96px;
+}
+
+
+
+
+        .npc-sprite.nearby .character-sprite {
+  filter: drop-shadow(0 0 8px rgba(253, 230, 138, 0.9));
+}
+
+        .danger-mark {
+          position: absolute;
+          right: -4px;
+          top: 8px;
+          width: 22px;
+          height: 22px;
+          border-radius: 999px;
+          background: #dc2626;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 900;
+          font-size: 12px;
+        }
+
+        .notebook-panel {
+          width: min(100%, ${SCENE_WIDTH}px);
+          margin: 18px auto 0;
+          background: rgba(10, 18, 30, 0.96);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 18px;
+          padding: 18px;
+        }
+
+        .notebook-panel h3 {
+          margin: 0 0 14px;
+        }
+
+        .notebook-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
+        }
+
+        .notebook-grid h4 {
+          margin: 0 0 8px;
+        }
+
+        .notebook-grid ul {
+          margin: 0;
+          padding-left: 18px;
+          color: #e2e8f0;
+        }
+
+        .muted {
+          color: #cbd5e1;
+        }
+
+        .talk-prompt {
+          position: fixed;
+          left: 50%;
+          bottom: 24px;
+          transform: translateX(-50%);
+          background: rgba(7, 16, 26, 0.96);
+          color: white;
+          padding: 12px 16px;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          z-index: 30;
+        }
+
+        .dialog-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(2, 6, 23, 0.58);
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+          padding: 16px;
+          z-index: 40;
+        }
+
+        .dialog-box {
+          width: min(100%, 1100px);
+          background: rgba(10, 18, 30, 0.98);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 20px;
+          padding: 18px;
+          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+        }
+
+        .dialog-header {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: flex-start;
+          margin-bottom: 12px;
+        }
+
+        .dialog-header h2 {
+          margin: 0 0 6px;
+        }
+
+        .close-btn {
+          background: #1f2937;
+          color: white;
+          border: none;
+          border-radius: 10px;
+          padding: 10px 14px;
+          cursor: pointer;
+        }
+
+        .chat-log {
+          min-height: 220px;
+          max-height: 320px;
+          overflow-y: auto;
+          background: rgba(2, 6, 23, 0.45);
+          border-radius: 16px;
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin-bottom: 12px;
+        }
+
+        .msg {
+          max-width: 72%;
+          padding: 10px 12px;
+          border-radius: 14px;
+          line-height: 1.45;
+          font-size: 14px;
+        }
+
+        .msg.user {
+          align-self: flex-end;
+          background: #1d4ed8;
+        }
+
+        .msg.npc {
+          align-self: flex-start;
+          background: #1f2937;
+        }
+
+        .controls {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+
+        .input {
+          flex: 1;
+          min-width: 260px;
+          background: #0f172a;
+          color: white;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 12px;
+          padding: 12px 14px;
+          outline: none;
+        }
+
+        .action-button {
+          background: #2563eb;
+          color: white;
+          border: none;
+          border-radius: 12px;
+          padding: 12px 14px;
+          cursor: pointer;
+          font-weight: 700;
+        }
+
+        .kill-button {
+  background: #991b1b;
+}
+
+        .ending-banner {
+          width: min(100%, ${SCENE_WIDTH}px);
+          margin: 18px auto 0;
+          padding: 16px 18px;
+          background: #3b0f0f;
+          color: #fee2e2;
+          border-radius: 16px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          font-weight: 700;
+        }
+
+        @media (max-width: 900px) {
+          .notebook-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .hud {
+            position: static;
+          }
+        }
+      `}</style>
     </main>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background:
-      "radial-gradient(circle at top, #1f2a44 0%, #0f172a 45%, #020617 100%)",
-    color: "white",
-    padding: 20,
-    fontFamily: "Arial, sans-serif",
-  },
-  topBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 16,
-    flexWrap: "wrap",
-  },
-  topLeft: { display: "flex", gap: 8, flexWrap: "wrap" },
-  topRight: { display: "flex", gap: 12, flexWrap: "wrap", opacity: 0.85 },
-  badge: {
-    background: "#172554",
-    border: "1px solid #60a5fa33",
-    padding: "8px 12px",
-    borderRadius: 999,
-    fontSize: 14,
-  },
-  hint: { fontSize: 14 },
-  gameLayout: {
-    display: "grid",
-    gridTemplateColumns: "1fr 340px",
-    gap: 16,
-    alignItems: "start",
-  },
-  mapPanel: {
-    background: "rgba(15,23,42,0.72)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 18,
-    padding: 16,
-    overflow: "auto",
-  },
-  map: {
-    position: "relative",
-    margin: "0 auto",
-    background:
-      "linear-gradient(180deg, rgba(51,65,85,0.95), rgba(30,41,59,0.98))",
-    borderRadius: 20,
-    border: "2px solid rgba(255,255,255,0.08)",
-    overflow: "hidden",
-  },
-  roomBox: {
-    position: "absolute",
-    border: "1px solid rgba(255,255,255,0.06)",
-    boxSizing: "border-box",
-  },
-  roomLabel: {
-    position: "absolute",
-    top: 8,
-    left: 10,
-    fontSize: 12,
-    color: "#cbd5e1",
-    letterSpacing: 0.5,
-  },
-  actor: {
-    position: "absolute",
-    width: 52,
-    minHeight: 52,
-    borderRadius: 16,
-    background: "rgba(15,23,42,0.9)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 6,
-    textAlign: "center",
-    boxSizing: "border-box",
-  },
-  npcSprite: { fontSize: 22, marginBottom: 2 },
-  playerSprite: { fontSize: 20, marginBottom: 2 },
-  actorLabel: { fontWeight: 700, fontSize: 11, lineHeight: 1.1 },
-  actorSub: { fontSize: 9, opacity: 0.7, lineHeight: 1.1 },
-  accuseMarker: {
-    position: "absolute",
-    top: -8,
-    right: -6,
-    background: "#dc2626",
-    color: "white",
-    width: 20,
-    height: 20,
-    borderRadius: 999,
-    fontSize: 12,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 700,
-  },
-  promptBubble: {
-    position: "absolute",
-    background: "#0f172a",
-    border: "1px solid rgba(255,255,255,0.12)",
-    color: "white",
-    padding: "8px 10px",
-    borderRadius: 10,
-    fontSize: 12,
-    whiteSpace: "nowrap",
-  },
-  mapLegend: {
-    marginTop: 12,
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
-    color: "#cbd5e1",
-    fontSize: 13,
-  },
-  rightPanel: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  card: {
-    background: "rgba(15,23,42,0.72)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 18,
-    padding: 16,
-  },
-  cardTitle: { margin: "0 0 12px 0" },
-  section: { marginBottom: 16 },
-  muted: { color: "#cbd5e1", fontSize: 14 },
-  list: {
-    margin: "8px 0 0 18px",
-    padding: 0,
-    color: "#e2e8f0",
-    fontSize: 14,
-  },
-  dialogueOverlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(2,6,23,0.55)",
-    display: "flex",
-    alignItems: "flex-end",
-    justifyContent: "center",
-    padding: 16,
-  },
-  dialogueBox: {
-    width: "min(1100px, 100%)",
-    background: "rgba(15,23,42,0.96)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 22,
-    padding: 18,
-    boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
-  },
-  dialogueHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    marginBottom: 10,
-  },
-  dialogueName: {
-    fontSize: 24,
-    fontWeight: 800,
-  },
-  closeBtn: {
-    background: "#1f2937",
-    color: "white",
-    border: "none",
-    borderRadius: 10,
-    padding: "10px 14px",
-    cursor: "pointer",
-  },
-  publicFace: {
-    color: "#dbeafe",
-    marginBottom: 12,
-    fontSize: 14,
-  },
-  chatLog: {
-    minHeight: 220,
-    maxHeight: 320,
-    overflowY: "auto",
-    background: "rgba(2,6,23,0.45)",
-    borderRadius: 16,
-    padding: 12,
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    marginBottom: 12,
-  },
-  msg: {
-    maxWidth: "72%",
-    padding: "10px 12px",
-    borderRadius: 14,
-    lineHeight: 1.45,
-    fontSize: 14,
-  },
-  rumorStrip: {
-    marginBottom: 12,
-    fontSize: 13,
-    color: "#fde68a",
-  },
-  inputRow: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  input: {
-    flex: 1,
-    minWidth: 260,
-    background: "#0f172a",
-    color: "white",
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 12,
-    padding: "12px 14px",
-    outline: "none",
-  },
-  button: {
-    background: "#2563eb",
-    color: "white",
-    border: "none",
-    borderRadius: 12,
-    padding: "12px 14px",
-    cursor: "pointer",
-    fontWeight: 700,
-  },
-};
