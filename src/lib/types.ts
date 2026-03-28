@@ -14,6 +14,7 @@ export interface NPCState {
   role: string;
   personality: string;
   publicFace: string;
+  backstory?: string;       // new — randomised each run
   secret: string;
   truthsKnown: string[];
   beliefs: Record<string, string>;
