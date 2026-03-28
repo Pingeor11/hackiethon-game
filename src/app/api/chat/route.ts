@@ -21,9 +21,9 @@ async function callGroqText(prompt: string) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-instant",
+      model: "llama-3.1-8b-instant",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.8,
+      temperature: 0.65,
     }),
   });
 
@@ -80,10 +80,19 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      const losingState = {
+        ...body.worldState,
+        gameOver: true,
+        winner: false,
+        investigationLog: [
+          ...body.worldState.investigationLog,
+          `Aqua killed ${target}. ${target} was innocent. The real killer was ${body.worldState.killer}.`,
+        ],
+      };
       return NextResponse.json({
-        reply: `${target} was not the murderer. You lose.`,
-        updatedWorldState: null,
-        resetGame: true,
+        reply: `${target} was not the murderer. The real killer was ${body.worldState.killer}.`,
+        updatedWorldState: losingState,
+        resetGame: false,
       });
     }
 

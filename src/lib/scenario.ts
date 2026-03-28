@@ -331,7 +331,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "manager_financial_betrayal",
     killer: "Manager",
     motive: "Ai discovered the manager had been skimming a percentage of her earnings for years — quietly, methodically, in ways she couldn't have found without help. She found help. She had a lawyer. The appointment was Monday.",
-    method: "He let himself in with a key she didn't know he still had. He knew the security system. He disabled the east camera. He staged it as a break-in. Almost worked.",
+    method: "He let himself in with his spare key, disabled the security camera he'd installed himself, and strangled her — staging the scene to look like a break-in gone wrong.",
     truthSummary: [
       "The financial fraud is real and documentable if anyone examines the right accounts.",
       "The fan was outside that night but arrived after — he saw nothing useful.",
@@ -360,7 +360,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "manager_memoir_discovery",
     killer: "Manager",
     motive: "Ai had been writing a memoir. The manager accessed her laptop remotely and read it. She described thirteen years of his management as a cage. He went to reason with her. She wouldn't be reasoned with.",
-    method: "He went to the house to confront her. He had accessed her laptop remotely two days earlier. He knew what she'd written. He told himself he just wanted to talk.",
+    method: "He arrived during the gap in her schedule he knew by heart, got in with his key, and beat her to death with a paperweight from her own desk — the memoir still open on her laptop behind him.",
     truthSummary: [
       "The remote laptop access is logged and traceable by anyone who knows to look.",
       "The co-idol knew Ai was writing something — Ai had mentioned it — but promised not to tell.",
@@ -389,7 +389,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "manager_tokyo_dome_pressure",
     killer: "Manager",
     motive: "Ai had told him she was quitting B-Komachi after the next tour. Not after Tokyo Dome. Before it. The dream he'd built his entire life around was being cancelled and she'd already made the decision without him.",
-    method: "He went to the house to beg her to reconsider. The conversation became an argument. The argument became something he can't fully account for in his own memory.",
+    method: "She let him in because she always did — and he strangled her in the hallway during an argument about Tokyo Dome that she refused to lose.",
     truthSummary: [
       "Ai had drafted a formal withdrawal from B-Komachi — Ruby found the draft.",
       "The co-idol knew Ai was thinking about leaving — Ai had told her in confidence.",
@@ -420,7 +420,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "coidol_solo_contract",
     killer: "CoIdol",
     motive: "Ai had signed a solo deal and an acting contract that would end B-Komachi entirely. The co-idol found out from the director — carelessly mentioned, as he does everything. Six years of her life was going to end because Ai decided to move on without telling her.",
-    method: "She went to the house after a group dinner. Everyone else had already left. She wanted Ai to look at her — really look at her — and explain it. The conversation lasted forty minutes.",
+    method: "After forty minutes of argument, she grabbed Ai by the throat in the kitchen and didn't let go until it was over.",
     truthSummary: [
       "The solo contract was real and signed. Ai hadn't told the group yet.",
       "The director told the co-idol and has been carrying quiet guilt about that since.",
@@ -449,7 +449,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "coidol_sabotage_discovered",
     killer: "CoIdol",
     motive: "Ai had discovered that the co-idol had been quietly sabotaging her auditions for over a year — calling casting directors, redirecting opportunities, planting doubts. She'd compiled the evidence and taken it to the executive. A formal review had been scheduled.",
-    method: "The co-idol went to the house to beg Ai to withdraw the complaint. She'd found out about the review through an agency contact. Ai said no. The co-idol says she doesn't fully remember the rest.",
+    method: "When Ai refused to drop the complaint, the co-idol smashed a vase from their joint shoot over her head in the hallway.",
     truthSummary: [
       "The sabotage was systematic and documented over more than a year.",
       "The executive had received Ai's evidence and begun an internal process.",
@@ -478,7 +478,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "coidol_breaking_point",
     killer: "CoIdol",
     motive: "Ai had been offered — and accepted — a role that the co-idol had auditioned for and been passed over on. The same week, a journalist published a profile of Ai that described the co-idol as 'the group's quiet backbone' — industry language for invisible. Something broke.",
-    method: "She showed up at Ai's house without a plan. She'd been drinking. She wanted to scream at her. She wanted Ai to finally, once, feel what it felt like to be her.",
+    method: "Drunk and beyond control, she beat Ai with a kitchen object during a screaming fight that started at the front door and ended on the kitchen floor.",
     truthSummary: [
       "The casting decision was real — the co-idol had auditioned and was in serious consideration before Ai was approached.",
       "The article was published three days before Ai died — the co-idol kept a copy.",
@@ -509,7 +509,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "director_trainee_witness",
     killer: "Director",
     motive: "Ai had witnessed the director in a situation with a younger trainee that he could not explain and could not survive publicly. She'd given him three days to come forward himself. He spent those three days making other plans.",
-    method: "Used a secondary building entrance registered to an alias he'd maintained for years. Staged it to implicate an obvious suspect. Almost worked.",
+    method: "He came through the service entrance using a fake name, stabbed her once in the hallway, and staged the scene — but staged it too cleanly, which is what gave him away.",
     truthSummary: [
       "The trainee exists, is alive, and has not spoken to anyone official because they're terrified.",
       "The manager received an unexplained payment from an agency account six weeks ago — doesn't know what it was for.",
@@ -538,7 +538,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "director_production_files",
     killer: "Director",
     motive: "Ai had production files proving the director had fraudulently credited himself on multiple significant works. She'd been sitting on it for two years. Then she told him she was writing a book. She'd been saving it for the book.",
-    method: "He went to the apartment to find and remove the files while she was out. She came home ninety minutes early. He was still there.",
+    method: "He broke in to steal the files, she came home early and caught him, and he strangled her with the power cable from her own monitor.",
     truthSummary: [
       "The files existed. They're gone. But Ai made secondary copies the director doesn't know about.",
       "The co-idol knew Ai had 'something' she'd been holding — Ai had mentioned it without details.",
@@ -567,7 +567,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "director_aqua_protection",
     killer: "Director",
     motive: "Ai had discovered something about Aqua's past — something connected to the circumstances of his birth — and was going to go public with it. The director believed it would destroy Aqua. He made a decision Aqua will never know he made.",
-    method: "He went to ask her not to. She had already sent the information to a journalist with a publication date. He had run out of options.",
+    method: "She trusted him enough to turn her back during the conversation — he used that moment, and used his hands, and was gone before she hit the floor.",
     truthSummary: [
       "The information about Aqua's past was real and Ai had verified it.",
       "The journalist contact exists — Ruby found an email thread that has since been deleted.",
@@ -598,7 +598,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "fan_online_radicalisation",
     killer: "Fan",
     motive: "Someone spent eight months building him up online — feeding him the story that the industry was destroying Ai, that she was being exploited and suppressed, that a real fan would do something real. He believed them. He doesn't know who they were.",
-    method: "He went to the house thinking he was saving her. He had been building toward this for weeks without letting himself see it.",
+    method: "He waited outside her house at the time he knew she'd return alone, and stabbed her at the front door before she could close it.",
     truthSummary: [
       "The anonymous account that radicalised him is gone now but the messages on his phone survive.",
       "The manager had a security escalation report about the fan filed six weeks ago — he didn't act on it.",
@@ -627,7 +627,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "fan_fabricated_message",
     killer: "Fan",
     motive: "He received a screenshot of Ai mocking him to a friend — dismissive, cruel, specific. He read it two hundred times. It never occurred to him to question whether it was real.",
-    method: "He went to the house in a state he can't fully describe. He wanted her to explain it. He wanted her to say it wasn't true.",
+    method: "He showed up at 11pm with the screenshot on his phone, she denied writing it, and he stabbed her in the doorway — the printout still in his jacket when police found him.",
     truthSummary: [
       "The screenshot was fabricated — manufactured and sent to him deliberately by someone who needed a scapegoat.",
       "The director has the technical knowledge and an existing reason to want chaos around Ai.",
@@ -656,7 +656,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "fan_delusion_escalation",
     killer: "Fan",
     motive: "His obsession had been building for years into something that had its own logic — a private story in which Ai needed him, in which his love was special and reciprocal, in which the distance between them was just circumstance. He went to close the distance.",
-    method: "He had been to the house before, more than once, never going further than the street. That night he went further.",
+    method: "She answered the door without fear because she recognised him from fan events — and he stabbed her before either of them understood what he was doing.",
     truthSummary: [
       "He had been to the street outside the house at least four times in the month before Ai died.",
       "The manager had received two separate security flags about the fan and had not escalated either.",
@@ -681,13 +681,58 @@ const scenarios: ScenarioTemplate[] = [
     sideDeals: buildSideDeals(),
   },
 
+  {
+    id: "fan_father_informant",
+    killer: "Fan",
+    motive: "The fan had always known Ai as a performer — untouchable, distant, a dream. Then a man contacted him claiming to be the biological father of Ai's children, furious that Ai had hidden them and built a public image of purity on top of it. He gave the fan an address. He said Ai had been lying to everyone who loved her. The fan had built his entire emotional life on that love. The lie shattered it.",
+    method: "He went to the address the father gave him. He brought a knife — not because he planned to use it, he would tell you, but because the city is dangerous at night and he always carries one. Ai opened the door. He showed her a photo the father had sent — Ai with two small children, clearly hers, clearly hidden. She didn't deny it. She asked him to come inside and talk. He didn't go inside. What happened in the doorway took less than thirty seconds. He was on the train home before anyone called an emergency number.",
+    truthSummary: [
+      "A man identifying himself as the biological father of Ai's children gave the fan her home address and photographic evidence of the children.",
+      "The father's motive was to expose Ai's hidden life — the children represent a secret she'd maintained throughout her career.",
+      "The fan is the killer but is also a tool. The father knew exactly what he was putting in motion.",
+      "Ruby knows Ai had children she kept private. She is one of them. This fact is not yet known to the fan.",
+    ],
+    globalClues: [
+      "The fan received a message from an unregistered number six days before Ai died — the message contained an address and a photo.",
+      "The father exists and is findable. He has not come forward. He is somewhere in the industry.",
+      "Ruby found a photo in Ai's things — a man she doesn't recognise, a note on the back that says 'he knows'.",
+    ],
+    npcOverrides: {
+      Fan: {
+        secret: "A man told me she was lying. He showed me proof. He gave me her address. I didn't ask his name. I didn't ask how he knew. I just needed to see her face when I showed her the photo. I needed her to explain it. She didn't explain it. She just looked at me like she'd been waiting for this moment. Like she was tired.",
+        truthsKnown: [
+          "A man contacted me. He said he was the father of her children. He gave me a photo and an address.",
+          "I went to the address. It was real. She answered the door.",
+          "I don't know who he was. I don't know why he chose me. I think about that.",
+        ],
+      },
+      Manager: {
+        secret: "I knew about the children. I've always known. I helped her keep it hidden because that was my job and because she asked me to. The father — I met him once, years ago. I told him to stay away. I don't know if he listened.",
+        truthsKnown: [
+          "Ai had children she kept private. I was one of the people who helped manage that secret.",
+          "The father contacted me years ago. I told him the arrangement was none of his business.",
+          "I don't know if he's involved in what happened. I'm afraid to find out.",
+        ],
+      },
+      Executive: {
+        secret: "I've known about the children for four years. It was a managed risk — contained, documented, professionally handled. The father was paid to stay silent. Apparently the payment didn't hold.",
+        truthsKnown: [
+          "The agency knew about Ai's children. We managed the information.",
+          "The father received a settlement. He signed documents. Those documents apparently mean nothing.",
+          "If the father's involvement surfaces, it surfaces everything. Including what the agency knew and when.",
+        ],
+      },
+    },
+    sideDeals: buildSideDeals(),
+  },
+
   // ══ EXECUTIVE ════════════════════════════════════════════════════════════════
 
   {
     id: "executive_whistleblower",
     killer: "Executive",
     motive: "Ai had spent months building a file — names, dates, locations, evidence of systematic exploitation of trainees at agency-affiliated events. She had a journalist and a publication date. He had a week.",
-    method: "Pre-planned. Professional. The fan's proximity to the area was not coincidence — the executive had been monitoring the fan for months and knew how to use him.",
+    method: "He hired someone to kill her and make it look like the fan did it — he was in Osaka with forty witnesses when it happened.",
     truthSummary: [
       "The file Ai was building was real. Parts of it still exist — Ruby found a handwritten list.",
       "The manager had been kept comfortable and incurious. He didn't know what his silence was covering.",
@@ -716,7 +761,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "executive_defection_clause",
     killer: "Executive",
     motive: "Ai had signed a defection contract with a rival agency. The terms included a clause allowing three other B-Komachi members to follow her within sixty days. The agency would not survive losing four artists simultaneously.",
-    method: "He had the fan under surveillance for six weeks before making the decision. He needed the story to already exist before he pointed to it.",
+    method: "He spent six weeks engineering the fan as a scapegoat, then paid a contractor to kill her — his alibi was airtight because he'd built it in advance.",
     truthSummary: [
       "The defection contract was countersigned — Ruby found a copy in Ai's things.",
       "The manager knew and was devastated. His grief is real. His complicity in other things is also real.",
@@ -745,7 +790,7 @@ const scenarios: ScenarioTemplate[] = [
     id: "executive_past_crime_exposure",
     killer: "Executive",
     motive: "Ai had uncovered documentation of a financial crime from fifteen years ago — before he joined the agency, before everything. She wasn't going to go to the police. She was going to give it to Aqua. She thought Aqua had a right to know because it connected to his father.",
-    method: "He asked to meet her privately. He brought someone. It was framed as a conversation about legacy.",
+    method: "He arranged a private meeting at her home, brought a man from his security firm, and left after twenty minutes — the second man followed four minutes later.",
     truthSummary: [
       "The documentation Ai found was real and connected to Aqua's origins in ways the executive cannot afford to have examined.",
       "The director knew about the historical crime — was peripherally connected to it — and has been terrified since Ai died.",

@@ -159,7 +159,7 @@ export function applyExtractionToWorld(
 
   // ── Memory ───────────────────────────────────────────────────────────────
   pushUnique(npc.memories, extraction.memorySummary);
-  if (npc.memories.length > 6) npc.memories = npc.memories.slice(-6);
+  if (npc.memories.length > 12) npc.memories = npc.memories.slice(-12);
 
   // ── Clues and contradictions ─────────────────────────────────────────────
   pushUnique(next.cluesDiscovered, extraction.discoveredClue);
@@ -240,7 +240,7 @@ export function applyExtractionToWorld(
     const others = (Object.keys(next.npcs) as NPCName[])
       .filter(n => n !== npcName && n !== "Ruby")
       .sort(() => Math.random() - 0.5)
-      .slice(0, 2);
+      .slice(0, 3);
 
     others.forEach(otherName => {
       pushUnique(next.npcs[otherName].rumorsHeard, extraction.rumor!);

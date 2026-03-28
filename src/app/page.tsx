@@ -62,6 +62,7 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
 
 export default function HomePage() {
   const [worldState, setWorldState] = useState<WorldState | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
   const [messages, setMessages] = useState<Record<NPCName, LocalMessage[]>>(initialMessages);
   const [playerPos, setPlayerPos] = useState({ x: 530, y: 470 });
   const [facing, setFacing] = useState<Facing>("right");
@@ -80,8 +81,19 @@ export default function HomePage() {
   const chatLogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    fetch("/api/game").then((r) => r.json()).then(setWorldState);
+    fetch("/api/game").then((r) => r.json()).then(data => {
+      setWorldState(data);
+      setShowIntro(true);
+    });
   }, []);
+
+  // Dismiss intro on any keypress
+  useEffect(() => {
+    if (!showIntro) return;
+    const handler = () => setShowIntro(false);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showIntro]);
 
   // auto-scroll chat to bottom whenever messages change
   useEffect(() => {
@@ -201,34 +213,188 @@ export default function HomePage() {
     setLoading(true);
     const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ npcName, kill: npcName, playerMessage: "", worldState }) });
     const data = await res.json();
-    if (data.resetGame) {
-      const newGame = await (await fetch("/api/game")).json();
-      setWorldState(newGame); setSelectedNPC(null); setInput(""); setMessages(initialMessages); setPlayerPos({ x: 530, y: 470 }); setFacing("right");
-    } else { setWorldState(data.updatedWorldState); setSelectedNPC(null); }
+    // Always show the end screen — never auto-reset
+    // updatedWorldState comes back with gameOver: true whether win or lose
+    if (data.updatedWorldState) {
+      setWorldState(data.updatedWorldState);
+    } else {
+      // Fallback: manually set gameOver on current state
+      setWorldState({
+        ...worldState,
+        gameOver: true,
+        winner: data.reply?.includes("win") ?? false,
+      });
+    }
+    setSelectedNPC(null);
     setLoading(false);
   }
 
-  if (!worldState) return (
-    <main className="loading-screen">
-      <div className="loading-inner">
-        <div className="star-spin">★</div>
-        <p>LOADING INVESTIGATION</p>
-        <div className="dots"><span>.</span><span>.</span><span>.</span></div>
-      </div>
+  if (showIntro && worldState) return (
+    <main style={{
+      width:"100vw", height:"100vh", background:"#100818",
+      display:"flex", alignItems:"center", justifyContent:"center",
+      flexDirection:"column", overflow:"hidden",
+      fontFamily:"'Press Start 2P', monospace",
+      cursor:"pointer",
+    }} onClick={() => setShowIntro(false)}>
       <style jsx global>{`
-        html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#100818;}
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+        @keyframes pulse-glow{0%,100%{text-shadow:0 0 20px #f472b6aa}50%{text-shadow:0 0 40px #f472b6,0 0 80px #f472b644}}
       `}</style>
-      <style jsx>{`
-        .loading-screen{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;background:#100818;font-family:'Press Start 2P',monospace;}
-        .loading-inner{text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px;}
-        .star-spin{font-size:40px;color:#f472b6;animation:spin 2s linear infinite;text-shadow:0 0 20px #f472b6aa;}
-        p{font-size:10px;letter-spacing:0.14em;color:#e879f9;}
-        .dots{display:flex;gap:4px;font-size:20px;color:#f472b6;}
-        .dots span{animation:blink 1.2s step-end infinite;}
-        .dots span:nth-child(2){animation-delay:.4s;}
-        .dots span:nth-child(3){animation-delay:.8s;}
+
+      {/* CRT */}
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",background:"repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.15) 3px,rgba(0,0,0,0.15) 4px)",zIndex:5}} />
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",background:"radial-gradient(ellipse at center,transparent 40%,rgba(8,2,16,0.88) 100%)",zIndex:6}} />
+
+      <div style={{
+        position:"relative", zIndex:10,
+        display:"flex", flexDirection:"column", alignItems:"center",
+        gap:"40px", padding:"40px", maxWidth:"680px", textAlign:"center",
+      }}>
+        {/* Star */}
+        <div style={{
+          fontSize:"36px", color:"#f472b6",
+          animation:"pulse-glow 2s ease-in-out infinite",
+          animationDelay:"0.5s",
+          opacity:0, animationFillMode:"forwards",
+        }}>★</div>
+
+        {/* Main text — each line fades in with delay */}
+        <div style={{display:"flex",flexDirection:"column",gap:"20px",width:"100%"}}>
+          <div style={{
+            fontSize:"10px", color:"#f0e8ff", letterSpacing:"0.15em", lineHeight:"2",
+            animation:"fadeInUp 0.8s ease forwards",
+            animationDelay:"0.3s", opacity:0,
+          }}>
+            AI HOSHINO HAS BEEN FOUND DEAD
+          </div>
+          <div style={{
+            fontSize:"10px", color:"#f0e8ff", letterSpacing:"0.15em", lineHeight:"2",
+            animation:"fadeInUp 0.8s ease forwards",
+            animationDelay:"1s", opacity:0,
+          }}>
+            AT THE FRONT OF THE HOUSE.
+          </div>
+          <div style={{
+            fontSize:"9px", color:"#c084fc", letterSpacing:"0.12em", lineHeight:"2",
+            animation:"fadeInUp 0.8s ease forwards",
+            animationDelay:"1.8s", opacity:0,
+          }}>
+            ON THE DAY SHE WOULD PERFORM AT TOKYO DOME.
+          </div>
+
+          {/* Divider */}
+          <div style={{
+            width:"60px", height:"1px", background:"#f472b644",
+            margin:"4px auto",
+            animation:"fadeInUp 0.8s ease forwards",
+            animationDelay:"2.4s", opacity:0,
+          }} />
+
+          <div style={{
+            fontSize:"9px", color:"#e879f9", letterSpacing:"0.14em", lineHeight:"2",
+            animation:"fadeInUp 0.8s ease forwards",
+            animationDelay:"2.8s", opacity:0,
+          }}>
+            YOU ARE AI'S SON — AQUA HOSHINO.
+          </div>
+          <div style={{
+            fontSize:"11px", color:"#f472b6", letterSpacing:"0.2em",
+            animation:"fadeInUp 0.8s ease forwards, pulse-glow 2s ease-in-out infinite",
+            animationDelay:"3.4s", opacity:0,
+            textShadow:"0 0 20px #f472b6aa",
+          }}>
+            FIND OUT WHO DID IT.
+          </div>
+        </div>
+
+        {/* Skip prompt */}
+        <div style={{
+          fontSize:"6px", color:"#3a1050", letterSpacing:"0.14em",
+          animation:"blink 1.2s step-end infinite, fadeInUp 0.8s ease forwards",
+          animationDelay:"4s", opacity:0,
+        }}>
+          CLICK ANYWHERE TO BEGIN
+        </div>
+      </div>
+    </main>
+  );
+
+  // Intro screen — shown after loading, before game
+
+  if (!worldState) return (
+    <main style={{
+      width:"100vw", height:"100vh", background:"#100818",
+      display:"flex", alignItems:"center", justifyContent:"center",
+      flexDirection:"column", gap:"32px", overflow:"hidden",
+      fontFamily:"'Press Start 2P', monospace",
+    }}>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+        html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#100818;}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+        @keyframes flicker{0%,100%{opacity:1}92%{opacity:1}93%{opacity:.4}94%{opacity:1}96%{opacity:.6}97%{opacity:1}}
+        @keyframes scanline-scroll{from{background-position:0 0}to{background-position:0 100%}}
+      `}</style>
+
+      {/* CRT scanlines */}
+      <div style={{
+        position:"fixed", inset:0, zIndex:10, pointerEvents:"none",
+        background:"repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.15) 3px,rgba(0,0,0,0.15) 4px)",
+      }} />
+      <div style={{
+        position:"fixed", inset:0, zIndex:11, pointerEvents:"none",
+        background:"radial-gradient(ellipse at center,transparent 50%,rgba(8,2,16,0.8) 100%)",
+      }} />
+
+      {/* Star */}
+      <div style={{
+        fontSize:"52px", color:"#f472b6",
+        animation:"spin 3s linear infinite",
+        textShadow:"0 0 30px #f472b6, 0 0 60px #f472b644",
+        zIndex:20,
+      }}>★</div>
+
+      {/* Title */}
+      <div style={{zIndex:20, textAlign:"center", display:"flex", flexDirection:"column", gap:"14px"}}>
+        <div style={{
+          fontSize:"13px", color:"#f472b6", letterSpacing:"0.3em",
+          textShadow:"0 0 20px #f472b6aa",
+          animation:"flicker 4s infinite",
+        }}>✦ OSHI NO KO ✦</div>
+        <div style={{fontSize:"8px", color:"#e879f9", letterSpacing:"0.2em"}}>
+          INVESTIGATION
+        </div>
+      </div>
+
+      {/* Loading bar */}
+      <div style={{zIndex:20, display:"flex", flexDirection:"column", alignItems:"center", gap:"10px"}}>
+        <div style={{
+          width:"240px", height:"6px",
+          background:"#1a0828", border:"1px solid #3a1050",
+          overflow:"hidden",
+        }}>
+          <div style={{
+            height:"100%", background:"#f472b6",
+            boxShadow:"0 0 10px #f472b6",
+            animation:"loading-bar 2s ease-in-out infinite",
+          }} />
+        </div>
+        <div style={{fontSize:"7px", color:"#6b3080", letterSpacing:"0.14em"}}>
+          LOADING INVESTIGATION
+          <span style={{animation:"blink 1s step-end infinite"}}>_</span>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes loading-bar {
+          0% { width: 0%; }
+          50% { width: 100%; }
+          51% { width: 0%; }
+          100% { width: 75%; }
+        }
       `}</style>
     </main>
   );
@@ -315,10 +481,18 @@ export default function HomePage() {
             <button className="icon-btn" onClick={() => setNotebookOpen(false)}>✕</button>
           </div>
           <div className="nb-body">
+            {/* Global clues — always visible, point at the killer */}
             <div className="nb-section">
-              <h4>▸ CLUES</h4>
+              <h4>▸ KNOWN FROM THE SCENE</h4>
+              {worldState.globalClues.map((c, i) => (
+                <p key={i} className="nb-entry" style={{ color: "#f0c070" }}>◆ {c}</p>
+              ))}
+            </div>
+            <div className="nb-hr" />
+            <div className="nb-section">
+              <h4>▸ CLUES DISCOVERED</h4>
               {worldState.cluesDiscovered.length === 0
-                ? <p className="nb-empty">— no clues yet —</p>
+                ? <p className="nb-empty">— nothing yet — talk to people —</p>
                 : worldState.cluesDiscovered.map((c, i) => <p key={i} className="nb-entry">◆ {c}</p>)}
             </div>
             <div className="nb-hr" />
@@ -333,19 +507,27 @@ export default function HomePage() {
               <h4>▸ LOG</h4>
               {worldState.investigationLog.slice(-6).map((e, i) => <p key={i} className="nb-entry log">· {e}</p>)}
             </div>
-            {worldState.elicitationLog && worldState.elicitationLog.length > 0 && (
-              <>
-                <div className="nb-hr" />
-                <div className="nb-section">
-                  <h4>▸ TECHNIQUES USED</h4>
-                  {worldState.elicitationLog.slice(-4).map((e, i) => (
-                    <p key={i} className="nb-entry" style={{ color: "#f472b6", fontSize: "13px" }}>
-                      ✦ [{e.npcName}] {e.note}
-                    </p>
-                  ))}
-                </div>
-              </>
-            )}
+            <div className="nb-hr" />
+            <div className="nb-section">
+              <h4>▸ TECHNIQUES</h4>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
+                {[
+                  "FLATTERY", "NAIVE FACADE", "MISSTATEMENT", "SHARED GRIEVANCE",
+                  "QUID PRO QUO", "ASSUMPTIVE Q", "SILENCE", "APPEAL TO VANITY",
+                  "INDIRECT", "EMOTIONAL BOND", "BAITING", "THIRD PARTY",
+                ].map((t) => (
+                  <span key={t} style={{
+                    fontFamily: "'Press Start 2P', monospace",
+                    fontSize: "6px",
+                    padding: "4px 6px",
+                    border: "1px solid #3a1050",
+                    background: "#180a22",
+                    color: "#c084fc",
+                    letterSpacing: "0.04em",
+                  }}>{t}</span>
+                ))}
+              </div>
+            </div>
           </div>
         </aside>
       )}
@@ -469,13 +651,117 @@ export default function HomePage() {
 
       {/* ── Ending ── */}
       {worldState.gameOver && (
-        <div className={`ending ${worldState.winner ? "win" : "lose"}`}>
-          <div className="ending-star">{worldState.winner ? "★" : "✕"}</div>
-          <p className="ending-title">{worldState.winner ? "CASE CLOSED" : "INVESTIGATION FAILED"}</p>
-          <p className="ending-body">
-            {worldState.winner ? `${worldState.killer} was responsible.` : `The real killer was ${worldState.killer}.`}
-          </p>
-          <p className="ending-sub">MOTIVE: {worldState.motive.toUpperCase()} · METHOD: {worldState.method.toUpperCase()}</p>
+        <div style={{
+          position:"fixed", inset:0, zIndex:500,
+          background:"rgba(5,0,12,0.92)",
+          display:"flex", alignItems:"center", justifyContent:"center",
+          flexDirection:"column",
+          fontFamily:"'Press Start 2P', monospace",
+        }}>
+          {/* CRT on end screen too */}
+          <div style={{
+            position:"absolute", inset:0, pointerEvents:"none",
+            background:"repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.15) 3px,rgba(0,0,0,0.15) 4px)",
+          }} />
+          <div style={{
+            position:"absolute", inset:0, pointerEvents:"none",
+            background:"radial-gradient(ellipse at center,transparent 40%,rgba(8,2,16,0.85) 100%)",
+          }} />
+
+          <div style={{
+            position:"relative", zIndex:10,
+            display:"flex", flexDirection:"column", alignItems:"center", gap:"28px",
+            padding:"40px 48px",
+            border: worldState.winner ? "2px solid #f472b666" : "2px solid #ff4a6a66",
+            background: worldState.winner ? "rgba(20,5,35,0.98)" : "rgba(20,5,10,0.98)",
+            boxShadow: worldState.winner
+              ? "0 0 60px #f472b622, inset 0 0 40px rgba(244,114,182,0.05)"
+              : "0 0 60px #ff4a6a22, inset 0 0 40px rgba(255,74,106,0.05)",
+            maxWidth:"600px", width:"90%",
+          }}>
+            {/* Big icon */}
+            <div style={{
+              fontSize:"56px",
+              animation:"spin 4s linear infinite",
+              color: worldState.winner ? "#f472b6" : "#ff4a6a",
+              textShadow: worldState.winner ? "0 0 30px #f472b6, 0 0 60px #f472b644" : "0 0 30px #ff4a6a, 0 0 60px #ff4a6a44",
+            }}>
+              {worldState.winner ? "★" : "✕"}
+            </div>
+
+            {/* Main verdict */}
+            <div style={{textAlign:"center", display:"flex", flexDirection:"column", gap:"8px"}}>
+              <div style={{
+                fontSize:"11px",
+                color: worldState.winner ? "#f472b6" : "#ff4a6a",
+                letterSpacing:"0.2em",
+                textShadow: worldState.winner ? "0 0 20px #f472b6aa" : "0 0 20px #ff4a6aaa",
+              }}>
+                {worldState.winner ? "MURDERER KILLED" : "MURDERER STILL ALIVE"}
+              </div>
+              <div style={{fontSize:"7px", color: worldState.winner ? "#c084fc" : "#ff8a6a", letterSpacing:"0.12em"}}>
+                {worldState.winner ? "THE TRUTH HAS BEEN AVENGED" : "YOU KILLED THE WRONG PERSON"}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div style={{width:"100%", height:"1px", background: worldState.winner ? "#f472b622" : "#ff4a6a22"}} />
+
+            {/* Details */}
+            <div style={{display:"flex", flexDirection:"column", gap:"12px", width:"100%"}}>
+              <div style={{display:"flex", gap:"10px", alignItems:"flex-start"}}>
+                <span style={{fontSize:"7px", color:"#6b3080", minWidth:"80px", letterSpacing:"0.1em"}}>KILLER</span>
+                <span style={{fontSize:"14px", fontFamily:"'VT323',monospace", color:"#f0e8ff", letterSpacing:"0.05em"}}>
+                  {worldState.killer.toUpperCase()}
+                </span>
+              </div>
+              <div style={{display:"flex", gap:"10px", alignItems:"flex-start"}}>
+                <span style={{fontSize:"7px", color:"#6b3080", minWidth:"80px", letterSpacing:"0.1em"}}>MOTIVE</span>
+                <span style={{fontSize:"14px", fontFamily:"'VT323',monospace", color:"#c084fc", lineHeight:"1.4"}}>
+                  {worldState.motive}
+                </span>
+              </div>
+              <div style={{display:"flex", gap:"10px", alignItems:"flex-start"}}>
+                <span style={{fontSize:"7px", color:"#6b3080", minWidth:"80px", letterSpacing:"0.1em"}}>METHOD</span>
+                <span style={{fontSize:"14px", fontFamily:"'VT323',monospace", color:"#c084fc", lineHeight:"1.4"}}>
+                  {worldState.method}
+                </span>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div style={{width:"100%", height:"1px", background: worldState.winner ? "#f472b622" : "#ff4a6a22"}} />
+
+            {/* Play again */}
+            <button
+              onClick={async () => {
+                const newGame = await (await fetch("/api/game")).json();
+                setWorldState(newGame);
+                setSelectedNPC(null);
+                setInput("");
+                setMessages(initialMessages);
+                setPlayerPos({ x: 530, y: 470 });
+                setFacing("right");
+              }}
+              style={{
+                fontFamily:"'Press Start 2P',monospace", fontSize:"8px",
+                padding:"12px 24px",
+                background:"transparent",
+                border: worldState.winner ? "1px solid #f472b6" : "1px solid #ff4a6a",
+                color: worldState.winner ? "#f472b6" : "#ff4a6a",
+                cursor:"pointer", letterSpacing:"0.1em",
+                transition:"all 0.2s",
+              }}
+              onMouseEnter={e => {
+                (e.target as HTMLButtonElement).style.background = worldState.winner ? "#f472b622" : "#ff4a6a22";
+              }}
+              onMouseLeave={e => {
+                (e.target as HTMLButtonElement).style.background = "transparent";
+              }}
+            >
+              ▶ INVESTIGATE AGAIN
+            </button>
+          </div>
         </div>
       )}
 
