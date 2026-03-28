@@ -21,7 +21,7 @@ async function callGroqText(prompt: string) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
+      model: "llama-3.3-70b-instant",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.8,
     }),
@@ -114,6 +114,9 @@ export async function POST(req: NextRequest) {
       memorySummary: `Aqua spoke with ${body.npcName}.`,
       elicitationWorked: false,
       elicitationNote: null,
+      aquaTone: "neutral",
+      npcBackchannelTarget: null,
+      npcBackchannelMessage: null,
     };
 
     const extraction = await callGroqJson<ExtractionResult>(
@@ -128,12 +131,25 @@ export async function POST(req: NextRequest) {
       extraction,
     );
 
+    // Check if a side deal was surfaced this turn
+    const surfacedDeal = updatedWorldState.sideDeals?.find(
+      (d: { discovered: boolean; exposedDescription: string }) =>
+        d.discovered &&
+        !body.worldState.sideDeals?.find(
+          (old: { exposedDescription: string; discovered: boolean }) =>
+            old.exposedDescription === d.exposedDescription && old.discovered
+        )
+    );
+
     return NextResponse.json({
       reply,
       updatedWorldState,
-      // Pass elicitation feedback to the frontend so it can show the toast
       elicitationFeedback: extraction.elicitationWorked
         ? extraction.elicitationNote
+        : null,
+      sideDealSurfaced: surfacedDeal?.exposedDescription ?? null,
+      backchannelDetected: extraction.npcBackchannelTarget
+        ? `${body.npcName} contacted ${extraction.npcBackchannelTarget} after this conversation.`
         : null,
     });
 

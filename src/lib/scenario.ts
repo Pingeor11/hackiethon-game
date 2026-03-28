@@ -3,7 +3,7 @@ import { NPCName, NPCState, ScenarioTemplate, SuspectName, WorldState } from "./
 // ─── FIXED CHARACTER IDENTITIES ───────────────────────────────────────────────
 // These never change between runs. This is who these people are.
 
-const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown">> = {
+const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown" | "sentMessages" | "warnedAboutAqua" | "exposedDeals">> = {
 
   Manager: {
     name: "Manager",
@@ -25,6 +25,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown">> = {
     rumorsHeard: [],
     revealedClues: [],
     isKillerCandidate: true,
+    aquaRelationship: "Watched Aqua grow up in Ai's orbit. Protective and guilty in equal measure.",
   },
 
   CoIdol: {
@@ -47,6 +48,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown">> = {
     rumorsHeard: [],
     revealedClues: [],
     isKillerCandidate: true,
+    aquaRelationship: "Aqua is Ai's child. Talking to Aqua is the closest thing to talking to Ai. Unbearable and magnetic at once.",
   },
 
   Director: {
@@ -69,6 +71,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown">> = {
     rumorsHeard: [],
     revealedClues: [],
     isKillerCandidate: true,
+    aquaRelationship: "Mentored Aqua. Cast him. Believed in him. Aqua is the closest thing to family he has in this industry.",
   },
 
   Fan: {
@@ -91,6 +94,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown">> = {
     rumorsHeard: [],
     revealedClues: [],
     isKillerCandidate: true,
+    aquaRelationship: "Feels a strange kinship — they both loved Ai in ways the industry didn't understand.",
   },
 
   Executive: {
@@ -113,6 +117,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown">> = {
     rumorsHeard: [],
     revealedClues: [],
     isKillerCandidate: true,
+    aquaRelationship: "Has always watched Aqua carefully. A child of Ai's with Aqua's drive is a liability.",
   },
 
   Ruby: {
@@ -135,6 +140,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown">> = {
     rumorsHeard: [],
     revealedClues: [],
     isKillerCandidate: false,
+    aquaRelationship: "Aqua's sister. Complete trust.",
   },
 };
 
@@ -269,6 +275,54 @@ const innocentCovers: Record<SuspectName, Array<{ secret: string; truthsKnown: s
 // Each scenario: only one killer, specific motive, specific method.
 // The same characters — but different circumstances led here.
 
+// ─── SIDE DEAL POOLS ─────────────────────────────────────────────────────────
+// Each scenario picks from these. They surface when related clues are found.
+
+function buildSideDeals() {
+  return [
+    {
+      id: "manager_executive_retainer",
+      parties: ["Manager", "Executive"] as NPCName[],
+      description: "The manager receives a quarterly retainer from the executive's holding company that does not appear in agency paperwork.",
+      surfaceClue: "financial payment manager executive arrangement",
+      exposedDescription: "The manager has been receiving undisclosed payments from the executive's holding company for years. Neither will say what for.",
+      discovered: false,
+    },
+    {
+      id: "director_executive_debt",
+      parties: ["Director", "Executive"] as NPCName[],
+      description: "The director has been completing productions at below-market rates for the agency to repay a personal debt to the executive.",
+      surfaceClue: "director executive deal arrangement production rate",
+      exposedDescription: "Gotanda has been working for the agency at a loss for years — repaying a personal debt to the executive through below-market productions. He can't afford to cross him.",
+      discovered: false,
+    },
+    {
+      id: "executive_revenue_skimming",
+      parties: ["Executive"] as NPCName[],
+      description: "The executive receives a percentage of three artists' revenues through a secondary holding structure that appears in no contract.",
+      surfaceClue: "executive revenue percentage artists hidden structure",
+      exposedDescription: "The executive has been taking an undisclosed cut of artist revenues — including Ai's — through a holding structure that appears in no contract any of them ever signed.",
+      discovered: false,
+    },
+    {
+      id: "manager_journalist_relationship",
+      parties: ["Manager"] as NPCName[],
+      description: "The manager has a standing relationship with a journalist who has buried two stories about the agency on request.",
+      surfaceClue: "manager journalist story buried press",
+      exposedDescription: "The manager has a journalist on retainer who has killed at least two damaging agency stories. The relationship goes back eight years.",
+      discovered: false,
+    },
+    {
+      id: "coidol_casting_director",
+      parties: ["CoIdol"] as NPCName[],
+      description: "The co-idol has been in secret talks with a casting director at a rival production house for two years.",
+      surfaceClue: "coidol casting rival production contract talks",
+      exposedDescription: "The co-idol has been quietly negotiating with a rival production house for two years — long before Ai's death. She was already planning her exit.",
+      discovered: false,
+    },
+  ];
+}
+
 const scenarios: ScenarioTemplate[] = [
 
   // ══ MANAGER ══════════════════════════════════════════════════════════════════
@@ -299,6 +353,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   {
@@ -327,6 +382,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   {
@@ -355,6 +411,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   // ══ CO-IDOL ══════════════════════════════════════════════════════════════════
@@ -385,6 +442,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   {
@@ -413,6 +471,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   {
@@ -441,6 +500,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   // ══ DIRECTOR ═════════════════════════════════════════════════════════════════
@@ -471,6 +531,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   {
@@ -499,6 +560,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   {
@@ -527,6 +589,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   // ══ FAN ══════════════════════════════════════════════════════════════════════
@@ -557,6 +620,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   {
@@ -585,6 +649,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   {
@@ -613,6 +678,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   // ══ EXECUTIVE ════════════════════════════════════════════════════════════════
@@ -643,6 +709,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   {
@@ -671,6 +738,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 
   {
@@ -699,6 +767,7 @@ const scenarios: ScenarioTemplate[] = [
         ],
       },
     },
+    sideDeals: buildSideDeals(),
   },
 ];
 
@@ -718,6 +787,14 @@ export function createNewGame(): WorldState {
 
   const npcs = deepClone(FIXED_NPCS) as Record<NPCName, NPCState>;
 
+  // Initialise fields that were Omitted from FIXED_NPCS
+  const allNPCNames: NPCName[] = ["Manager", "CoIdol", "Director", "Fan", "Executive", "Ruby"];
+  for (const name of allNPCNames) {
+    npcs[name].sentMessages = [];
+    npcs[name].warnedAboutAqua = false;
+    npcs[name].exposedDeals = [];
+  }
+
   // Assign secrets and truthsKnown based on role this run
   for (const name of suspectNames) {
     if (name === killer) {
@@ -733,9 +810,7 @@ export function createNewGame(): WorldState {
     }
   }
 
-  // Ruby's secret and truthsKnown are already set in FIXED_NPCS
-  // but we set them explicitly here for type safety
-
+  // Ruby has no secret or truthsKnown — she's Aqua's ally, not a suspect
 
   // Slightly randomise starting trust/suspicion so each run feels fresh
   for (const name of suspectNames) {
@@ -768,7 +843,10 @@ export function createNewGame(): WorldState {
       "Aqua begins the investigation.",
     ],
     elicitationLog: [],
+    aquaMood: "focused",
+    aquaReputation: "Unknown — nobody has spoken to Aqua yet.",
+    sideDeals: selected.sideDeals ?? buildSideDeals(),
+    questionedOrder: [],
     npcs,
   };
 }
-
