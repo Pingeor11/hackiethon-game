@@ -22,12 +22,7 @@ async function callGroqText(prompt: string) {
     },
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+      messages: [{ role: "user", content: prompt }],
       temperature: 0.8,
     }),
   });
@@ -60,10 +55,9 @@ async function callGroqJson<T>(prompt: string, fallback: T): Promise<T> {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as ChatRequestBody & {
-      kill?: string;
-    };
+    const body = (await req.json()) as ChatRequestBody & { kill?: string };
 
+    // ── KILL ──────────────────────────────────────────────────────────────────
     if (body.kill) {
       const target = body.kill;
       const isCorrect = target === body.worldState.killer;
@@ -93,10 +87,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── RUBY HELPER ───────────────────────────────────────────────────────────
     if (body.rubyHelp) {
-      const reply = await callGroqText(
-        buildRubyHelperPrompt(body.worldState),
-      );
+      const reply = await callGroqText(buildRubyHelperPrompt(body.worldState));
 
       return NextResponse.json({
         reply,
@@ -104,19 +97,23 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── NPC CONVERSATION ──────────────────────────────────────────────────────
     const npc = body.worldState.npcs[body.npcName];
 
     const reply = await callGroqText(
       buildNPCPrompt(npc, body.worldState, body.playerMessage),
     );
 
+    // Fallback now includes all ExtractionResult fields
     const fallbackExtraction: ExtractionResult = {
       trustDelta: 0,
       suspicionDelta: 0.05,
       discoveredClue: null,
       contradiction: null,
       rumor: `Aqua questioned ${body.npcName}.`,
-      memorySummary: `Aqua spoke with ${body.npcName} about the case.`,
+      memorySummary: `Aqua spoke with ${body.npcName}.`,
+      elicitationWorked: false,
+      elicitationNote: null,
     };
 
     const extraction = await callGroqJson<ExtractionResult>(
@@ -134,7 +131,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       reply,
       updatedWorldState,
+      // Pass elicitation feedback to the frontend so it can show the toast
+      elicitationFeedback: extraction.elicitationWorked
+        ? extraction.elicitationNote
+        : null,
     });
+
   } catch (error) {
     console.error("Chat route error:", error);
 

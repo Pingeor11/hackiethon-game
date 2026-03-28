@@ -14,9 +14,9 @@ export interface NPCState {
   role: string;
   personality: string;
   publicFace: string;
-  backstory?: string;       // new — randomised each run
-  secret: string;
-  truthsKnown: string[];
+  backstory?: string;
+  secret?: string;
+  truthsKnown?: string[];
   beliefs: Record<string, string>;
   trustPlayer: number;
   suspicionPlayer: number;
@@ -43,7 +43,7 @@ export interface WorldState {
   turn: number;
   tension: number;
   accusationUnlocked: boolean;
-  gameOver: boolean;
+  gameOver: false | true;
   winner: boolean;
 
   selectedScenarioId: string;
@@ -57,20 +57,31 @@ export interface WorldState {
   contradictionsFound: string[];
   investigationLog: string[];
 
+  // tracks which elicitation techniques have worked — shown to player as feedback
+  elicitationLog: ElicitationEntry[];
+
   npcs: Record<NPCName, NPCState>;
+}
+
+export interface ElicitationEntry {
+  turn: number;
+  npcName: NPCName;
+  technique: string;
+  note: string;
 }
 
 export interface ChatRequestBody {
   npcName: NPCName;
   playerMessage: string;
   worldState: WorldState;
-  accuse?: SuspectName;
+  kill?: SuspectName;
   rubyHelp?: boolean;
 }
 
 export interface ChatResponseBody {
   reply: string;
   updatedWorldState: WorldState;
+  elicitationFeedback?: string | null;
 }
 
 export interface ExtractionResult {
@@ -80,4 +91,6 @@ export interface ExtractionResult {
   contradiction: string | null;
   rumor: string | null;
   memorySummary: string;
+  elicitationWorked: boolean;
+  elicitationNote: string | null;
 }

@@ -121,8 +121,6 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown">> = {
     personality: "Extroverted, outgoing, loud, optimistic in the way that requires constant effort and never stops. Speaks without a filter — says what she thinks before she's finished thinking it, then keeps going. Makes connections with people instantly and genuinely. Is the opposite of her brother in almost every way. Is also, right now, running entirely on grief and purpose and not sleeping enough.",
     publicFace: "She looks like someone who has been crying and has decided that crying is not the end of anything. Talks fast. Remembers everything about everyone. Introduces herself to strangers at crime scenes. Currently treating finding the truth about Ai as a personal project she has accepted will take as long as it takes.",
     backstory: "Grew up knowing Ai as her mother. Knows the industry, knows the people, knows the shape of what Aqua is trying to do. Wants the truth not for justice in the abstract but because Ai was her mother and she deserved better and Ruby is going to make sure someone says so. Keeps making jokes that don't land because it's how she handles things. Apologises for the jokes immediately. Makes another one.",
-    
-    
     beliefs: {
       Manager: "I know he loved her. I also know love isn't the same as not having done something wrong.",
       CoIdol: "She's hiding something about the last real conversation she had with Ai. Every time it comes up she does this thing with her face.",
@@ -738,6 +736,7 @@ export function createNewGame(): WorldState {
   // Ruby's secret and truthsKnown are already set in FIXED_NPCS
   // but we set them explicitly here for type safety
 
+
   // Slightly randomise starting trust/suspicion so each run feels fresh
   for (const name of suspectNames) {
     npcs[name].trustPlayer = Math.min(0.95, Math.max(0.1,
@@ -768,6 +767,8 @@ export function createNewGame(): WorldState {
       "Ai has been found dead at the front of the house.",
       "Aqua begins the investigation.",
     ],
+    elicitationLog: [],
     npcs,
   };
 }
+

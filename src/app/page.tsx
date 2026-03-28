@@ -70,6 +70,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [typingNPC, setTypingNPC] = useState<NPCName | null>(null);
   const [notebookOpen, setNotebookOpen] = useState(false);
+  const [elicitationToast, setElicitationToast] = useState<string | null>(null);
 
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const [sceneRect, setSceneRect] = useState({ width: SCENE_WIDTH, height: SCENE_HEIGHT });
@@ -178,6 +179,10 @@ export default function HomePage() {
     const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ npcName: selectedNPC, playerMessage: msg, worldState }) });
     const data = await res.json();
     setWorldState(data.updatedWorldState);
+    if (data.elicitationFeedback) {
+      setElicitationToast(data.elicitationFeedback);
+      setTimeout(() => setElicitationToast(null), 5000);
+    }
     await typeNPCMessage(selectedNPC, data.reply);
     setLoading(false);
   }
@@ -328,6 +333,19 @@ export default function HomePage() {
               <h4>▸ LOG</h4>
               {worldState.investigationLog.slice(-6).map((e, i) => <p key={i} className="nb-entry log">· {e}</p>)}
             </div>
+            {worldState.elicitationLog && worldState.elicitationLog.length > 0 && (
+              <>
+                <div className="nb-hr" />
+                <div className="nb-section">
+                  <h4>▸ TECHNIQUES USED</h4>
+                  {worldState.elicitationLog.slice(-4).map((e, i) => (
+                    <p key={i} className="nb-entry" style={{ color: "#f472b6", fontSize: "13px" }}>
+                      ✦ [{e.npcName}] {e.note}
+                    </p>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </aside>
       )}
@@ -432,6 +450,20 @@ export default function HomePage() {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Elicitation feedback toast ── */}
+      {elicitationToast && (
+        <div style={{
+          position: "fixed", top: "52px", left: "50%", transform: "translateX(-50%)",
+          zIndex: 300, background: "#1a0535", border: "1px solid #f472b6",
+          padding: "8px 16px", maxWidth: "500px",
+          fontFamily: "'Press Start 2P', monospace", fontSize: "7px",
+          color: "#f472b6", letterSpacing: "0.06em", lineHeight: "1.8",
+          boxShadow: "0 0 20px #f472b633",
+        }}>
+          ✦ TECHNIQUE WORKED: {elicitationToast}
         </div>
       )}
 

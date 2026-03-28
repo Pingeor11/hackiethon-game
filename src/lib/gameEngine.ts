@@ -1,4 +1,4 @@
-import { ExtractionResult, Mood, NPCName, SuspectName, WorldState } from "./types";
+import { ElicitationEntry, ExtractionResult, Mood, NPCName, SuspectName, WorldState } from "./types";
 
 function clamp(value: number, min = 0, max = 1) {
   return Math.max(min, Math.min(max, value));
@@ -28,19 +28,22 @@ export function applyExtractionToWorld(
 
   next.turn += 1;
 
-  // Tension only rises when something real surfaces
+  // Tension rises only when real information surfaces
   if (extraction.discoveredClue || extraction.contradiction) {
     next.tension += 1;
   }
 
-  npc.trustPlayer = clamp(npc.trustPlayer + extraction.trustDelta);
+  // Elicitation bonus — successful technique increases trust more
+  const trustBonus = extraction.elicitationWorked ? 0.04 : 0;
+  npc.trustPlayer = clamp(npc.trustPlayer + extraction.trustDelta + trustBonus);
   npc.suspicionPlayer = clamp(npc.suspicionPlayer + extraction.suspicionDelta);
   npc.mood = deriveMood(npc.trustPlayer, npc.suspicionPlayer);
 
-  // Store memory — cap at 6 so prompts don't bloat
+  // Memory — capped at 6 entries
   pushUnique(npc.memories, extraction.memorySummary);
   if (npc.memories.length > 6) npc.memories = npc.memories.slice(-6);
 
+  // Clues and contradictions
   pushUnique(next.cluesDiscovered, extraction.discoveredClue);
   pushUnique(next.contradictionsFound, extraction.contradiction);
 
@@ -53,14 +56,27 @@ export function applyExtractionToWorld(
     next.investigationLog.push(`[contradiction] ${extraction.contradiction}`);
   }
 
-  // Spread rumours — random pair, capped at 4 rumours each
+  // Log successful elicitation technique for player feedback
+  if (extraction.elicitationWorked && extraction.elicitationNote) {
+    const entry: ElicitationEntry = {
+      turn: next.turn,
+      npcName,
+      technique: extraction.elicitationNote,
+      note: extraction.elicitationNote,
+    };
+    if (!next.elicitationLog) next.elicitationLog = [];
+    next.elicitationLog.push(entry);
+    next.investigationLog.push(`[technique worked] ${extraction.elicitationNote}`);
+  }
+
+  // Spread rumours — random pair, capped at 4 each
   if (extraction.rumor) {
     const others = (Object.keys(next.npcs) as NPCName[])
-      .filter((n) => n !== npcName && n !== "Ruby")
+      .filter(n => n !== npcName && n !== "Ruby")
       .sort(() => Math.random() - 0.5)
       .slice(0, 2);
 
-    others.forEach((otherName) => {
+    others.forEach(otherName => {
       pushUnique(next.npcs[otherName].rumorsHeard, extraction.rumor!);
       if (next.npcs[otherName].rumorsHeard.length > 4) {
         next.npcs[otherName].rumorsHeard = next.npcs[otherName].rumorsHeard.slice(-4);
@@ -75,16 +91,13 @@ export function applyExtractionToWorld(
     });
   }
 
-  // Unlock kill option — lower bar so it doesn't take forever
-  // 4 turns OR 1 clue — whichever comes first
-  if (next.turn >= 4 || next.cluesDiscovered.length >= 1) {
+  // Unlock kill option — after 3 turns OR first clue found
+  if (next.turn >= 3 || next.cluesDiscovered.length >= 1) {
     next.accusationUnlocked = true;
   }
 
   // Late game tension spike
-  if (next.turn >= 10) {
-    next.tension += 1;
-  }
+  if (next.turn >= 10) next.tension += 1;
 
   return next;
 }
