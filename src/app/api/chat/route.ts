@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
       aquaTone: "neutral",
       npcBackchannelTarget: null,
       npcBackchannelMessage: null,
+
     };
 
     const extraction = await callGroqJson<ExtractionResult>(
@@ -150,12 +151,43 @@ export async function POST(req: NextRequest) {
         )
     );
 
+    // ── Barter check ─────────────────────────────────────────────────────────
+    // If trust is high enough and the NPC has unrevealed truths, offer a trade
+    const npcAfter = updatedWorldState.npcs[body.npcName];
+    const unrevealedTruths = (npcAfter.truthsKnown ?? []).filter(
+      (t: string) => !npcAfter.revealedClues.some((c: string) => c.includes(t.slice(0, 20)))
+    );
+
+    let barterOffer = null;
+    if (
+      npcAfter.trustPlayer < 0.7 &&
+      npcAfter.trustPlayer > 0.4 &&
+      unrevealedTruths.length > 0 &&
+      Math.random() < 0.4 // 40% chance per turn when conditions met
+    ) {
+      const truthIndex = (npcAfter.truthsKnown ?? []).indexOf(unrevealedTruths[0]);
+      const askingOptions: Record<string, string> = {
+        Manager: "tell me what the executive said to you",
+        CoIdol: "tell me what you know about the director",
+        Director: "tell me what Aqua already knows",
+        Fan: "tell me you believe me — that I didn't do this",
+        Executive: "tell me who else you've spoken to",
+      };
+      barterOffer = {
+        npcName: body.npcName,
+        offer: `I know something about that night. Something specific.`,
+        asking: askingOptions[body.npcName] ?? "share something with me first",
+        truthIndex,
+      };
+    }
+
     return NextResponse.json({
       reply,
       updatedWorldState,
       elicitationFeedback: extraction.elicitationWorked
         ? extraction.elicitationNote
         : null,
+      barterOffer,
       sideDealSurfaced: surfacedDeal?.exposedDescription ?? null,
       backchannelDetected: extraction.npcBackchannelTarget
         ? `${body.npcName} contacted ${extraction.npcBackchannelTarget} after this conversation.`

@@ -207,6 +207,17 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     `WHAT YOU WANT: ${eco.wants[0] ?? ""}`,
     `WHAT YOU FEAR: ${eco.fears[0] ?? ""}`,
     ``,
+    // Power dynamics — implicit background, shapes how they talk about others
+    // Manager is financially dependent on Executive — he deflects questions about money
+    // Director owes Executive — he avoids criticising the agency directly
+    // Executive surveils the Fan — he's unusually informed about the fan's movements
+    // CoIdol was suffocating under Manager's control — resentment colours how she discusses him
+    npc.name === "Manager" ? `POWER CONTEXT: You are financially entangled with the executive in ways you don't want examined. When money or the agency's finances come up, you instinctively redirect. You protect the executive not out of loyalty but out of mutual necessity.` : ``,
+    npc.name === "Director" ? `POWER CONTEXT: You owe the executive something significant and personal. You have been careful your whole career not to bite the hand that covers your debt. When the executive comes up, you are measured — not defensive, just precise.` : ``,
+    npc.name === "Executive" ? `POWER CONTEXT: You have leverage over the manager and the director that they don't fully understand. You know more about the fan than you should. When these people come up, you speak about them with the quiet confidence of someone who holds the cards.` : ``,
+    npc.name === "CoIdol" ? `POWER CONTEXT: The manager controlled every significant decision in your career. You have spent years performing gratitude for things that cost you. When he comes up, the resentment is real even when the words are professional.` : ``,
+    npc.name === "Fan" ? `POWER CONTEXT: You exist entirely outside the industry's power structure. That makes you the only one here who sees it clearly from the outside. You notice things about these relationships that the people inside them can't see.` : ``,
+    ``,
     `YOUR SECRET (never state — let it shape only what you avoid):`,
     npc.secret ?? "Nothing to hide.",
     isKiller
@@ -232,10 +243,11 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     ``,
     `RULES:`,
     `- 1-2 sentences only.`,
-    `- DEFAULT TO OPEN. Most people talk freely in normal conversation — only clam up when directly threatened.`,
-    `- Deflect only if the question directly touches your specific secret. Everything else gets a real answer.`,
-    `- Gossip naturally. Mention other people. Have opinions. This is an industry full of people who talk.`,
-    `- If returning: be visibly slightly different — reference something from before, react to what's changed.`,
+    `- DEFAULT TO OPEN. Most people talk freely — only deflect when directly threatened.`,
+    `- BARTER: If Aqua offers you something valuable — sympathy, intel about someone else, a shared grievance — give something back. Information flows in this industry through exchange, not interrogation.`,
+    `- POWER DYNAMICS: You are aware of who owes who in this industry. If Aqua seems to know something about an arrangement, you react to that knowledge — confirm, deny, or use it.`,
+    `- GOSSIP: Mention other people's arrangements naturally. "I heard the director's been doing work for the agency at a loss for years — always found that odd." This is normal conversation in this world.`,
+    `- If returning: be visibly slightly different — react to what's changed since you last spoke.`,
     `- Never lecture. Imply, don't explain.`,
     ``,
     `Aqua says: "${playerMessage}"`,
@@ -306,7 +318,7 @@ export function buildExtractionPrompt(
     ``,
     `Rules:`,
     `- trustDelta/suspicionDelta: -0.15 to 0.15`,
-    `- discoveredClue: any slip, reaction, or reveal grounded in NPC truths. Generous — null only for pure small talk.`,
+    `- discoveredClue: ONLY extract if the exchange revealed something directly relevant to the murder — a specific fact about where someone was that night, what they knew about Ai's death, a suspicious detail, or something that points toward who did it. Do NOT extract general personality reveals, emotional reactions, or vague impressions. If the NPC is the killer, look for overcorrections or knowledge they shouldn't have. Null if nothing murder-relevant surfaced.`,
     `- rumor: short industry gossip about this exchange. Always include.`,
     `- memorySummary: one sentence from NPC perspective.`,
     `- elicitationWorked: true if technique="${technique}" matched NPC weaknesses.`,
@@ -314,6 +326,7 @@ export function buildExtractionPrompt(
     `- aquaTone: detected="${tone}", adjust if needed.`,
     `- npcBackchannelTarget: Manager contacts Executive if finances mentioned. CoIdol contacts Director if contract mentioned. Director contacts Executive if their deal mentioned. Executive contacts Manager if case-building detected. Fan never contacts anyone. Null if harmless.`,
     `- npcBackchannelMessage: one short vague sentence if contacting someone, else null.`,
+
     ``,
     `NPC: ${npc.name} | secret: ${npc.secret ?? "none"}`,
     `truths: ${(npc.truthsKnown ?? []).join(" | ") || "none"}`,
