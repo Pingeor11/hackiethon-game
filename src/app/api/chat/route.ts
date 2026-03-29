@@ -4,9 +4,10 @@ import {
   buildNPCPrompt,
   buildRubyHelperPrompt,
   buildDealRevealPrompt,
+  buildDealCompletionCheckPrompt,
 } from "@/lib/prompts";
 import { applyExtractionToWorld } from "@/lib/gameEngine";
-import { ChatRequestBody, ExtractionResult, ActiveDeal } from "@/lib/types";
+import { ChatRequestBody, ExtractionResult, ActiveDeal, NPCName } from "@/lib/types";
 
 async function callGroqText(prompt: string) {
   const apiKey = process.env.GROQ_API_KEY;
@@ -47,15 +48,12 @@ async function callGroqJson<T>(prompt: string, fallback: T): Promise<T> {
   }
 }
 
-// ── Deal definitions — each NPC has one specific deal they'll offer ────────────
+// ── Deal definitions ───────────────────────────────────────────────────────────
 const dealDefinitions: Record<string, {
   task: string;
-  taskTarget: string | null;
+  taskTarget: NPCName | null;
   offer: string;
   minTrust: number;
-  // Keywords player must use when reporting back to prove they did the task
-  completionKeywords: string[];
-  // What the deal-giver NPC already told us about what they want
   taskContext: string;
 }> = {
   Manager: {
@@ -63,67 +61,89 @@ const dealDefinitions: Record<string, {
     taskTarget: "Executive",
     offer: "There's something about that night I haven't told anyone. I could tell you.",
     minTrust: 0.5,
-    completionKeywords: ["executive", "sell", "agency", "deal", "sale", "said", "told me", "mentioned"],
-    taskContext: "Manager wants to know if the Executive is planning to sell the agency behind everyone's backs.",
+    taskContext: "Manager wants to know if the Executive is planning to sell the agency. The player should report back what the Executive said about this — something specific about the sale, the deal, or the agency's future.",
   },
   CoIdol: {
     task: "Ask the Manager why he didn't submit my name for the last casting. Come back with exactly what he says.",
     taskTarget: "Manager",
     offer: "I know who I saw near the house that night. I haven't told anyone.",
     minTrust: 0.45,
-    completionKeywords: ["manager", "casting", "submit", "name", "said", "told me", "because", "reason"],
-    taskContext: "CoIdol wants to know why the Manager blocked her casting opportunity.",
+    taskContext: "CoIdol wants to know why the Manager didn't submit her name for a casting. The player should report back what the Manager said about this — a reason, an excuse, or a deflection.",
   },
   Director: {
+    // taskTarget: null — Gate 1 uses world-state: cluesDiscovered >= 2
     task: "Tell me honestly what you've already found out. All of it. Then I'll tell you something.",
     taskTarget: null,
     offer: "I'll tell you about an arrangement I have with the Executive that changes how you should read this.",
     minTrust: 0.55,
-    completionKeywords: ["found", "discovered", "know", "learned", "clue", "evidence", "told me", "saw"],
-    taskContext: "Director wants Aqua to share their investigation findings first as a show of trust.",
+    taskContext: "Director wants Aqua to genuinely share what they've discovered in the investigation so far — real clues, specific things learned from other people. The message must contain actual investigative findings, not vague reassurances or one-word answers.",
   },
   Fan: {
     task: "Ask Ruby if she thinks I did this. Come back and tell me honestly what she said.",
     taskTarget: "Ruby",
     offer: "I have information from inside the fan network — things that happened near the house that night.",
     minTrust: 0.4,
-    completionKeywords: ["ruby", "said", "thinks", "believe", "told me", "doesn't think", "innocent"],
-    taskContext: "Fan wants to know if Ruby — someone close to Ai — believes he could have done it.",
+    taskContext: "Fan wants to know if Ruby believes he could have killed Ai. The player should relay what Ruby actually said about the Fan — whether she thinks he's innocent, guilty, or suspicious.",
   },
   Executive: {
+    // taskTarget: null — Gate 1 uses world-state: Manager has been questioned
     task: "Tell me what the Manager has already told you about our financial arrangement. Exactly.",
     taskTarget: null,
     offer: "I'll tell you what the agency knew about Ai in the weeks before she died.",
     minTrust: 0.5,
-    completionKeywords: ["manager", "financial", "arrangement", "money", "said", "told me", "payment", "deal"],
-    taskContext: "Executive wants to know what the Manager has already revealed about their financial dealings.",
+    taskContext: "Executive wants to know what the Manager has already told Aqua about the financial arrangement between them. The player should relay specific things the Manager said — about money, payments, or their business relationship.",
   },
 };
 
-// ── Check if a player message meaningfully reports back on a deal task ─────────
-function detectDealCompletion(
-  deal: ActiveDeal,
-  playerMessage: string,
-  npcName: string,
-  worldState: any,
-): boolean {
-  // Must be talking to the deal-giver
-  if (deal.npcName !== npcName) return false;
-  if (deal.status !== "pending") return false;
-
-  const lower = playerMessage.toLowerCase();
+// ── Gate 1: State flag / world-state check ────────────────────────────────────
+// For deals WITH a taskTarget: target NPC must have completedTaskFor flag set
+// For deals WITHOUT a taskTarget (Director, Executive): world-state conditions
+function gate1StateCheck(deal: ActiveDeal, worldState: any): boolean {
   const def = dealDefinitions[deal.npcName];
   if (!def) return false;
 
-  // If deal requires talking to a specific NPC, check they've been visited
   if (deal.taskTarget) {
-    const hasVisitedTarget = worldState.questionedOrder?.includes(deal.taskTarget);
-    if (!hasVisitedTarget) return false;
+    // The target NPC must have been visited productively and flagged
+    const targetNPC = worldState.npcs[deal.taskTarget];
+    if (!targetNPC) return false;
+    return (targetNPC.completedTaskFor ?? []).includes(deal.npcName);
   }
 
-  // Check player message contains enough completion keywords
-  const matches = def.completionKeywords.filter(kw => lower.includes(kw));
-  return matches.length >= 2;
+  // Null-target deals use world-state gates
+  if (deal.npcName === "Director") {
+    // Must have real findings to share
+    return (worldState.cluesDiscovered ?? []).length >= 2;
+  }
+
+  if (deal.npcName === "Executive") {
+    // Manager must have been questioned at least once
+    return (worldState.questionedOrder ?? []).includes("Manager");
+  }
+
+  return false;
+}
+
+// ── Gate 2: LLM check — did the player actually report meaningfully? ──────────
+async function gate2LLMCheck(
+  deal: ActiveDeal,
+  playerMessage: string,
+  worldState: any,
+): Promise<{ pass: boolean; reason: string }> {
+  const def = dealDefinitions[deal.npcName];
+  if (!def) return { pass: false, reason: "No deal definition found." };
+
+  const prompt = buildDealCompletionCheckPrompt(
+    deal.npcName,
+    def.taskContext,
+    playerMessage,
+    worldState.cluesDiscovered ?? [],
+    worldState.questionedOrder ?? [],
+  );
+
+  return callGroqJson<{ pass: boolean; reason: string }>(
+    prompt,
+    { pass: false, reason: "Could not evaluate." },
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -134,36 +154,21 @@ export async function POST(req: NextRequest) {
     if (body.kill) {
       const target = body.kill;
       const isCorrect = target === body.worldState.killer;
-
-      if (isCorrect) {
-        const updatedWorldState = {
+      return NextResponse.json({
+        reply: isCorrect
+          ? `${target} was the murderer. You win.`
+          : `${target} was not the murderer. The real killer was ${body.worldState.killer}.`,
+        updatedWorldState: {
           ...body.worldState,
           gameOver: true,
-          winner: true,
+          winner: isCorrect,
           investigationLog: [
             ...body.worldState.investigationLog,
-            `Aqua killed ${target}. ${target} was the murderer.`,
+            isCorrect
+              ? `Aqua killed ${target}. ${target} was the murderer.`
+              : `Aqua killed ${target}. ${target} was innocent. The real killer was ${body.worldState.killer}.`,
           ],
-        };
-        return NextResponse.json({
-          reply: `${target} was the murderer. You win.`,
-          updatedWorldState,
-          resetGame: false,
-        });
-      }
-
-      const losingState = {
-        ...body.worldState,
-        gameOver: true,
-        winner: false,
-        investigationLog: [
-          ...body.worldState.investigationLog,
-          `Aqua killed ${target}. ${target} was innocent. The real killer was ${body.worldState.killer}.`,
-        ],
-      };
-      return NextResponse.json({
-        reply: `${target} was not the murderer. The real killer was ${body.worldState.killer}.`,
-        updatedWorldState: losingState,
+        },
         resetGame: false,
       });
     }
@@ -174,39 +179,54 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ reply, updatedWorldState: body.worldState });
     }
 
-    // ── CHECK FOR DEAL FULFILLMENT BEFORE NPC RESPONSE ────────────────────────
-    const pendingDeals = (body.worldState.activeDeals ?? []).filter(
-      (d: ActiveDeal) => d.status === "pending"
+    // ── HYBRID DEAL COMPLETION — both gates must pass ─────────────────────────
+    const pendingDealsForNPC = (body.worldState.activeDeals ?? []).filter(
+      (d: ActiveDeal) => d.status === "pending" && d.npcName === body.npcName
     );
 
     let fulfilledDeal: ActiveDeal | null = null;
-    let dealRevealReply: string | null = null;
     let dealRevealTruth: string | null = null;
+    let gate2FailReason: string | null = null;
 
-    for (const deal of pendingDeals) {
-      if (detectDealCompletion(deal, body.playerMessage, body.npcName, body.worldState)) {
-        fulfilledDeal = deal;
-        break;
+    for (const deal of pendingDealsForNPC) {
+      // Gate 1 — state flag or world-state condition
+      if (!gate1StateCheck(deal, body.worldState)) continue;
+
+      // Gate 2 — LLM judges the report
+      const g2 = await gate2LLMCheck(deal, body.playerMessage, body.worldState);
+      if (!g2.pass) {
+        gate2FailReason = g2.reason;
+        continue;
       }
+
+      fulfilledDeal = deal;
+      gate2FailReason = null;
+      break;
     }
 
     // ── NPC CONVERSATION ──────────────────────────────────────────────────────
     const npc = body.worldState.npcs[body.npcName];
 
-    // If a deal is being fulfilled, build a special reveal prompt
     let replyPrompt: string;
     if (fulfilledDeal) {
-      const dealNPCState = body.worldState.npcs[fulfilledDeal.npcName];
-      const truthToReveal = (dealNPCState.truthsKnown ?? [])[fulfilledDeal.truthIndex];
+      const truthToReveal = (body.worldState.npcs[fulfilledDeal.npcName].truthsKnown ?? [])[fulfilledDeal.truthIndex];
       dealRevealTruth = truthToReveal ?? null;
-      replyPrompt = buildDealRevealPrompt(npc, body.worldState, body.playerMessage, truthToReveal ?? "");
+
+      const isKillerDeal = fulfilledDeal.npcName === body.worldState.killer;
+      replyPrompt = buildDealRevealPrompt(
+        npc,
+        body.worldState,
+        body.playerMessage,
+        truthToReveal ?? "",
+        isKillerDeal ? body.worldState.motive : undefined,
+      );
     } else {
       replyPrompt = buildNPCPrompt(npc, body.worldState, body.playerMessage);
     }
 
     const reply = await callGroqText(replyPrompt);
 
-    // Fallback extraction
+    // ── EXTRACTION ────────────────────────────────────────────────────────────
     const fallbackExtraction: ExtractionResult = {
       trustDelta: 0,
       suspicionDelta: 0.05,
@@ -229,7 +249,6 @@ export async function POST(req: NextRequest) {
       fallbackExtraction,
     );
 
-    // If deal was fulfilled, inject the truth as a clue into extraction
     if (fulfilledDeal && dealRevealTruth) {
       extraction.discoveredClue = `[DEAL CONFIRMED] ${fulfilledDeal.npcName}: ${dealRevealTruth}`;
     }
@@ -241,28 +260,53 @@ export async function POST(req: NextRequest) {
       extraction,
     );
 
-    // Mark the deal as fulfilled in world state
+    // ── GATE 1 FLAG: mark target NPC as visited for pending deals ─────────────
+    // Every turn: if this NPC is a taskTarget for any pending deal AND the
+    // exchange was productive, set completedTaskFor flag on this NPC
+    const allPendingDeals = (updatedWorldState.activeDeals ?? []).filter(
+      (d: ActiveDeal) => d.status === "pending"
+    );
+
+    for (const deal of allPendingDeals) {
+      if (deal.taskTarget !== body.npcName) continue;
+      // Productive = extraction got a clue OR a non-trivial memory summary
+      const productive = !!(
+        extraction.discoveredClue ||
+        (extraction.memorySummary && extraction.memorySummary.length > 20)
+      );
+      if (!productive) continue;
+
+      const targetNPC = updatedWorldState.npcs[body.npcName];
+      if (!targetNPC.completedTaskFor) targetNPC.completedTaskFor = [];
+      if (!targetNPC.completedTaskFor.includes(deal.npcName as NPCName)) {
+        targetNPC.completedTaskFor.push(deal.npcName as NPCName);
+        updatedWorldState.investigationLog.push(
+          `[gate1 set] ${body.npcName} visit flagged as complete for ${deal.npcName}'s deal.`
+        );
+      }
+    }
+
+    // ── MARK DEAL FULFILLED ───────────────────────────────────────────────────
     if (fulfilledDeal) {
-      const dealIndex = (updatedWorldState.activeDeals ?? []).findIndex(
+      const idx = (updatedWorldState.activeDeals ?? []).findIndex(
         (d: ActiveDeal) => d.npcName === fulfilledDeal!.npcName && d.status === "pending"
       );
-      if (dealIndex !== -1) {
-        updatedWorldState.activeDeals[dealIndex].status = "fulfilled";
-        updatedWorldState.activeDeals[dealIndex].revealedTruth = dealRevealTruth ?? undefined;
+      if (idx !== -1) {
+        updatedWorldState.activeDeals[idx].status = "fulfilled";
+        updatedWorldState.activeDeals[idx].revealedTruth = dealRevealTruth ?? undefined;
       }
-      updatedWorldState.investigationLog.push(
-        `[deal fulfilled] ${fulfilledDeal.npcName} revealed: ${dealRevealTruth}`
-      );
-      // Also add to confirmed truths
       if (!updatedWorldState.confirmedTruths) updatedWorldState.confirmedTruths = [];
       updatedWorldState.confirmedTruths.push({
         source: fulfilledDeal.npcName,
         truth: dealRevealTruth ?? "",
         turn: updatedWorldState.turn,
       });
+      updatedWorldState.investigationLog.push(
+        `[deal fulfilled] ${fulfilledDeal.npcName} revealed: ${dealRevealTruth}`
+      );
     }
 
-    // Check if a side deal was surfaced this turn
+    // ── SIDE DEAL SURFACE CHECK ───────────────────────────────────────────────
     const surfacedDeal = updatedWorldState.sideDeals?.find(
       (d: { discovered: boolean; exposedDescription: string }) =>
         d.discovered &&
@@ -272,26 +316,18 @@ export async function POST(req: NextRequest) {
         )
     );
 
-    // ── New deal offer logic ──────────────────────────────────────────────────
+    // ── NEW DEAL OFFER ────────────────────────────────────────────────────────
     const npcAfter = updatedWorldState.npcs[body.npcName];
     const unrevealedTruths = (npcAfter.truthsKnown ?? []).filter(
       (t: string) => !npcAfter.revealedClues.some((c: string) => c.includes(t.slice(0, 20)))
     );
 
     let barterOffer = null;
-
-    // Don't offer a new deal if one is already pending for this NPC
     const existingDeal = (updatedWorldState.activeDeals ?? []).find(
       (d: ActiveDeal) => d.npcName === body.npcName && d.status === "pending"
     );
 
-    // Don't offer a deal the turn a deal was just fulfilled
-    if (
-      !existingDeal &&
-      !fulfilledDeal &&
-      unrevealedTruths.length > 0 &&
-      Math.random() < 0.35
-    ) {
+    if (!existingDeal && !fulfilledDeal && unrevealedTruths.length > 0 && Math.random() < 0.35) {
       const def = dealDefinitions[body.npcName];
       if (def && npcAfter.trustPlayer >= def.minTrust && npcAfter.suspicionPlayer < 0.65) {
         const truthIndex = (npcAfter.truthsKnown ?? []).indexOf(unrevealedTruths[0]);
@@ -323,13 +359,16 @@ export async function POST(req: NextRequest) {
       backchannelDetected: extraction.npcBackchannelTarget
         ? `${body.npcName} contacted ${extraction.npcBackchannelTarget} after this conversation.`
         : null,
-      // Deal fulfillment payload — triggers cinematic reveal on frontend
       dealFulfilled: fulfilledDeal
         ? {
             npcName: fulfilledDeal.npcName,
             truth: dealRevealTruth,
-            reward: (dealDefinitions[fulfilledDeal.npcName]?.offer) ?? "",
+            reward: dealDefinitions[fulfilledDeal.npcName]?.offer ?? "",
           }
+        : null,
+      // Soft hint when Gate 1 passed but Gate 2 failed — player is close but report wasn't enough
+      dealHint: !fulfilledDeal && gate2FailReason && pendingDealsForNPC.length > 0
+        ? gate2FailReason
         : null,
     });
 

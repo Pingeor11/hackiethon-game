@@ -1,5 +1,6 @@
 import {
   AquaMood,
+  ConfirmedTruth,
   ElicitationEntry,
   ExtractionResult,
   GossipEntry,
@@ -40,7 +41,6 @@ function deriveReputation(world: WorldState): string {
 }
 
 // ─── HOW AQUA'S TONE AFFECTS EACH NPC ────────────────────────────────────────
-// Returns trust/suspicion modifier based on Aqua's mood and NPC's relationship
 
 function toneEffect(
   aquaTone: ExtractionResult["aquaTone"],
@@ -48,52 +48,52 @@ function toneEffect(
 ): { trustMod: number; suspicionMod: number } {
   const effects: Record<string, Record<string, { trustMod: number; suspicionMod: number }>> = {
     Manager: {
-      grieving: { trustMod: 0.06, suspicionMod: -0.03 },   // he responds to shared grief
-      angry:    { trustMod: -0.05, suspicionMod: 0.08 },   // anger makes him defensive
-      cold:     { trustMod: -0.03, suspicionMod: 0.04 },
-      focused:  { trustMod: 0.02, suspicionMod: 0.02 },
-      desperate: { trustMod: 0.04, suspicionMod: 0.03 },
-      neutral:  { trustMod: 0, suspicionMod: 0 },
+      grieving:  { trustMod: 0.06,  suspicionMod: -0.03 },
+      angry:     { trustMod: -0.05, suspicionMod: 0.08  },
+      cold:      { trustMod: -0.03, suspicionMod: 0.04  },
+      focused:   { trustMod: 0.02,  suspicionMod: 0.02  },
+      desperate: { trustMod: 0.04,  suspicionMod: 0.03  },
+      neutral:   { trustMod: 0,     suspicionMod: 0     },
     },
     CoIdol: {
-      grieving: { trustMod: 0.08, suspicionMod: -0.04 },   // grief disarms her
-      angry:    { trustMod: 0.03, suspicionMod: -0.02 },   // anger she understands
-      cold:     { trustMod: -0.06, suspicionMod: 0.05 },   // coldness shuts her down
-      focused:  { trustMod: -0.02, suspicionMod: 0.03 },
-      desperate: { trustMod: 0.05, suspicionMod: 0.0 },
-      neutral:  { trustMod: 0, suspicionMod: 0 },
+      grieving:  { trustMod: 0.08,  suspicionMod: -0.04 },
+      angry:     { trustMod: 0.03,  suspicionMod: -0.02 },
+      cold:      { trustMod: -0.06, suspicionMod: 0.05  },
+      focused:   { trustMod: -0.02, suspicionMod: 0.03  },
+      desperate: { trustMod: 0.05,  suspicionMod: 0.0   },
+      neutral:   { trustMod: 0,     suspicionMod: 0     },
     },
     Director: {
-      grieving: { trustMod: 0.04, suspicionMod: -0.02 },
-      angry:    { trustMod: -0.03, suspicionMod: 0.05 },
-      cold:     { trustMod: 0.03, suspicionMod: -0.01 },   // composure earns his respect
-      focused:  { trustMod: 0.05, suspicionMod: -0.02 },   // focus earns his respect most
-      desperate: { trustMod: -0.02, suspicionMod: 0.04 },
-      neutral:  { trustMod: 0, suspicionMod: 0 },
+      grieving:  { trustMod: 0.04,  suspicionMod: -0.02 },
+      angry:     { trustMod: -0.03, suspicionMod: 0.05  },
+      cold:      { trustMod: 0.03,  suspicionMod: -0.01 },
+      focused:   { trustMod: 0.05,  suspicionMod: -0.02 },
+      desperate: { trustMod: -0.02, suspicionMod: 0.04  },
+      neutral:   { trustMod: 0,     suspicionMod: 0     },
     },
     Fan: {
-      grieving: { trustMod: 0.1, suspicionMod: -0.06 },    // shared grief is his language
-      angry:    { trustMod: 0.04, suspicionMod: -0.03 },   // anger at the industry he gets
-      cold:     { trustMod: -0.08, suspicionMod: 0.06 },   // coldness scares him
-      focused:  { trustMod: -0.02, suspicionMod: 0.04 },
-      desperate: { trustMod: 0.07, suspicionMod: -0.04 },
-      neutral:  { trustMod: 0, suspicionMod: 0 },
+      grieving:  { trustMod: 0.1,   suspicionMod: -0.06 },
+      angry:     { trustMod: 0.04,  suspicionMod: -0.03 },
+      cold:      { trustMod: -0.08, suspicionMod: 0.06  },
+      focused:   { trustMod: -0.02, suspicionMod: 0.04  },
+      desperate: { trustMod: 0.07,  suspicionMod: -0.04 },
+      neutral:   { trustMod: 0,     suspicionMod: 0     },
     },
     Executive: {
-      grieving: { trustMod: -0.04, suspicionMod: 0.05 },   // grief reads as weakness
-      angry:    { trustMod: -0.06, suspicionMod: 0.07 },
-      cold:     { trustMod: 0.05, suspicionMod: -0.03 },   // coldness he respects
-      focused:  { trustMod: 0.03, suspicionMod: -0.01 },
-      desperate: { trustMod: -0.03, suspicionMod: 0.06 },
-      neutral:  { trustMod: 0, suspicionMod: 0 },
+      grieving:  { trustMod: -0.04, suspicionMod: 0.05  },
+      angry:     { trustMod: -0.06, suspicionMod: 0.07  },
+      cold:      { trustMod: 0.05,  suspicionMod: -0.03 },
+      focused:   { trustMod: 0.03,  suspicionMod: -0.01 },
+      desperate: { trustMod: -0.03, suspicionMod: 0.06  },
+      neutral:   { trustMod: 0,     suspicionMod: 0     },
     },
     Ruby: {
-      grieving: { trustMod: 0.05, suspicionMod: 0 },
-      angry:    { trustMod: 0.03, suspicionMod: 0 },
-      cold:     { trustMod: -0.02, suspicionMod: 0 },
-      focused:  { trustMod: 0.03, suspicionMod: 0 },
+      grieving:  { trustMod: 0.05, suspicionMod: 0 },
+      angry:     { trustMod: 0.03, suspicionMod: 0 },
+      cold:      { trustMod: -0.02, suspicionMod: 0 },
+      focused:   { trustMod: 0.03, suspicionMod: 0 },
       desperate: { trustMod: 0.04, suspicionMod: 0 },
-      neutral:  { trustMod: 0, suspicionMod: 0 },
+      neutral:   { trustMod: 0,    suspicionMod: 0 },
     },
   };
 
@@ -109,7 +109,6 @@ function checkSideDeals(world: WorldState, npcName: NPCName, clue: string | null
     if (deal.discovered) continue;
     if (!deal.parties.includes(npcName)) continue;
 
-    // Check if the discovered clue contains keywords from the surface trigger
     const triggerWords = deal.surfaceClue.toLowerCase().split(" ").filter(w => w.length > 4);
     const clueLower = clue.toLowerCase();
     const matches = triggerWords.filter(w => clueLower.includes(w));
@@ -132,7 +131,15 @@ export function applyExtractionToWorld(
   extraction: ExtractionResult,
 ): WorldState {
   const next: WorldState = JSON.parse(JSON.stringify(world));
+
+  // ── Safety initialisers — guard against missing fields after deep clone ──
   if (!next.confirmedTruths) next.confirmedTruths = [];
+  for (const name of Object.keys(next.npcs)) {
+    if (!next.npcs[name as NPCName].completedTaskFor) {
+      next.npcs[name as NPCName].completedTaskFor = [];
+    }
+  }
+
   const npc = next.npcs[npcName];
 
   next.turn += 1;
@@ -182,7 +189,6 @@ export function applyExtractionToWorld(
     next.investigationLog.push(`[side deal exposed] ${surfacedDeal}`);
     pushUnique(next.cluesDiscovered, surfacedDeal);
 
-    // Both parties in the deal now know Aqua is getting close
     const deal = next.sideDeals.find(d => d.exposedDescription === surfacedDeal);
     if (deal) {
       deal.parties.forEach(partyName => {
@@ -213,15 +219,13 @@ export function applyExtractionToWorld(
     next.investigationLog.push(`[technique worked] ${extraction.elicitationNote}`);
   }
 
-  // ── NPC backchannel — they message someone after being questioned ─────────
+  // ── NPC backchannel ───────────────────────────────────────────────────────
   if (extraction.npcBackchannelTarget && extraction.npcBackchannelMessage) {
     const target = extraction.npcBackchannelTarget;
     if (next.npcs[target] && target !== npcName) {
       const message = `${npcName} told me: "${extraction.npcBackchannelMessage}"`;
       pushUnique(next.npcs[target].rumorsHeard, message);
       next.npcs[target].sentMessages = next.npcs[target].sentMessages ?? [];
-
-      // Being warned makes the target more suspicious of Aqua
       next.npcs[target].suspicionPlayer = clamp(
         next.npcs[target].suspicionPlayer + 0.08
       );
@@ -230,18 +234,16 @@ export function applyExtractionToWorld(
         next.npcs[target].trustPlayer,
         next.npcs[target].suspicionPlayer
       );
-
       next.investigationLog.push(
         `[backchannel] ${npcName} contacted ${target} after speaking with Aqua.`
       );
     }
   }
 
-  // ── Power dynamics — drip gossip hints when relevant NPCs are questioned ──
+  // ── Power dynamics ────────────────────────────────────────────────────────
   if (next.powerDynamics) {
     for (const dynamic of next.powerDynamics) {
       if (dynamic.exposed) continue;
-      // Surface a hint if we just questioned one of the parties in this dynamic
       if (dynamic.holder === npcName || dynamic.subject === npcName) {
         const nextHint = dynamic.gossipHints[dynamic.hintsCollected];
         if (nextHint && !next.gossipFeed.find(g => g.text === nextHint)) {
@@ -252,7 +254,6 @@ export function applyExtractionToWorld(
             source: "industry contact",
             relatedTo: dynamic.holder,
           });
-          // If we've collected enough hints, expose the implication
           if (dynamic.hintsCollected >= dynamic.hintsNeeded) {
             dynamic.exposed = true;
             next.gossipFeed.push({
@@ -269,19 +270,16 @@ export function applyExtractionToWorld(
     }
   }
 
-  // ── Industry gossip feed ────────────────────────────────────────────────
+  // ── Industry gossip feed ──────────────────────────────────────────────────
   if (!next.gossipFeed) next.gossipFeed = [];
 
-  // Release one queued gossip entry per turn (turn: -1 = queued)
-  // This drip-feeds killer-specific clues from the scenario's truth data
+  // Release one queued gossip entry per turn
   const queued = next.gossipFeed.filter((g: GossipEntry) => g.turn === -1);
   if (queued.length > 0) {
-    // Release every 1-2 turns so clues arrive steadily
     const releaseIndex = Math.floor(Math.random() * Math.min(queued.length, 2));
     queued[releaseIndex].turn = next.turn;
   }
 
-  // Also add AI-generated gossip if it came back — but only as supplementary colour
   if (extraction.industryGossip) {
     next.gossipFeed.push({
       turn: next.turn,
@@ -291,7 +289,7 @@ export function applyExtractionToWorld(
     });
   }
 
-  // Cap total gossip shown to 15 entries (keep queued ones, trim visible ones)
+  // Cap gossip at 15 visible entries
   const visible = next.gossipFeed.filter((g: GossipEntry) => g.turn >= 0);
   const stillQueued = next.gossipFeed.filter((g: GossipEntry) => g.turn === -1);
   if (visible.length > 15) {
@@ -318,7 +316,7 @@ export function applyExtractionToWorld(
     }
   }
 
-  // ── Rumour spread (existing system) ─────────────────────────────────────
+  // ── Rumour spread ─────────────────────────────────────────────────────────
   if (extraction.rumor) {
     const others = (Object.keys(next.npcs) as NPCName[])
       .filter(n => n !== npcName && n !== "Ruby")
@@ -340,30 +338,16 @@ export function applyExtractionToWorld(
     });
   }
 
-  // ── Reputation update ────────────────────────────────────────────────────
+  // ── Reputation update ─────────────────────────────────────────────────────
   next.aquaReputation = deriveReputation(next);
 
-  // ── Unlock kill ──────────────────────────────────────────────────────────
+  // ── Unlock accusation ─────────────────────────────────────────────────────
   if (next.turn >= 2 || next.cluesDiscovered.length >= 1) {
     next.accusationUnlocked = true;
   }
 
-  // ── Late game tension spike ──────────────────────────────────────────────
+  // ── Late game tension spike ───────────────────────────────────────────────
   if (next.turn >= 10) next.tension += 1;
-
-  return next;
-}
-
-export function kill(world: WorldState, target: SuspectName): WorldState {
-  const next: WorldState = JSON.parse(JSON.stringify(world));
-  next.gameOver = true;
-  next.winner = target === next.killer;
-
-  next.investigationLog.push(
-    next.winner
-      ? `Aqua killed ${target}. Correct — ${target} was responsible for Ai's death.`
-      : `Aqua killed ${target}. Wrong — ${target} was innocent. The real killer was ${next.killer}.`,
-  );
 
   return next;
 }

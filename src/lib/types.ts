@@ -31,6 +31,9 @@ export interface NPCState {
   sentMessages: string[];
   warnedAboutAqua: boolean;
   exposedDeals: string[];
+  // Gate 1 of hybrid deal completion — set when this NPC yielded real info
+  // that satisfies a pending deal's task. Value is the deal-giver's name.
+  completedTaskFor: NPCName[];
 }
 
 export interface SideDeal {
@@ -59,6 +62,7 @@ export interface ScenarioTemplate {
   killer: SuspectName;
   motive: string;
   method: string;
+  methodClue: string;  // short forensic clue shown in notebook — no names, no context
   truthSummary: string[];
   globalClues: string[];
   npcOverrides: Partial<Record<NPCName, Partial<NPCState>>>;
@@ -94,6 +98,7 @@ export interface WorldState {
   killer: SuspectName;
   motive: string;
   method: string;
+  methodClue: string;  // short forensic clue shown in notebook
   truthSummary: string[];
   globalClues: string[];
 

@@ -260,15 +260,21 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
 
 // ─── DEAL REVEAL PROMPT ───────────────────────────────────────────────────────
 // Used when a player returns to the deal-giver and fulfills the task.
-// The NPC delivers the promised truth dramatically — this is the payoff moment.
+//
+// Two modes:
+// - Innocent NPC: delivers their truthsKnown entry directly — a personal secret, not murder-related
+// - Killer NPC: does NOT get a scripted line. Gets the motive as private context and lets something
+//   slip — one true thing that only makes sense in retrospect. Not a confession. A crack.
 
 export function buildDealRevealPrompt(
   npc: NPCState,
   world: WorldState,
   playerMessage: string,
   truthToReveal: string,
+  killerMotive?: string,   // only passed when this NPC is the killer
 ) {
   const aquaMood = world.aquaMood ?? "focused";
+  const isKillerReveal = !!killerMotive;
 
   const lines: string[] = [
     `You are ${npc.name}, ${npc.role}.`,
@@ -283,18 +289,41 @@ export function buildDealRevealPrompt(
     `You previously struck a deal with Aqua. They had a task to complete before you'd share something.`,
     `Aqua has just returned and delivered on that task. They said: "${playerMessage}"`,
     ``,
-    `You now owe them the truth you promised. Here it is:`,
-    `"${truthToReveal}"`,
+
+    // ── INNOCENT PATH ────────────────────────────────────────────────────────
+    ...(!isKillerReveal ? [
+      `You now owe them the truth you promised. Here it is:`,
+      `"${truthToReveal}"`,
+      ``,
+      `INSTRUCTIONS:`,
+      `- Acknowledge that Aqua came through — briefly, not effusively.`,
+      `- Then deliver the truth you promised. Say it directly. This is the thing you've been holding.`,
+      `- You can be reluctant — this costs you something. But you keep your word.`,
+      `- 2-3 sentences maximum. The reveal should land hard.`,
+      `- Say it plainly, in your own voice. Don't hedge.`,
+      `- This is a moment. Let it be a moment.`,
+    ] : []),
+
+    // ── KILLER PATH ──────────────────────────────────────────────────────────
+    ...(isKillerReveal ? [
+      `WHAT YOU ARE CARRYING (private — do not state this directly):`,
+      `${killerMotive}`,
+      ``,
+      `INSTRUCTIONS:`,
+      `- Acknowledge that Aqua came through — briefly.`,
+      `- You agreed to tell them something. What comes out is not a confession.`,
+      `- It is one thing — a feeling, a detail, a fact about what happened — that slips through`,
+      `  because this conversation has gotten under your skin.`,
+      `- It should feel like grief or frustration or exhaustion, not guilt.`,
+      `- It should hint at why things went the way they went — without saying you did anything.`,
+      `- Someone who already knows the truth would hear it differently than someone who doesn't.`,
+      `- DO NOT confess. DO NOT name what you did. DO NOT say "I killed her" or anything close.`,
+      `- One or two sentences. Quiet. Costs you something to say it.`,
+      `- Stay completely in character. This is a slip, not a speech.`,
+    ] : []),
+
     ``,
-    `INSTRUCTIONS:`,
-    `- Acknowledge that Aqua came through — briefly, not effusively.`,
-    `- Then deliver the truth you promised. Say it directly. This is the thing you've been holding.`,
-    `- You can be reluctant — this costs you something. But you keep your word.`,
-    `- 2-3 sentences maximum. The reveal should land hard.`,
-    `- Do NOT hedge or water down the truth. Say it plainly, in your own voice.`,
-    `- This is a moment. Let it be a moment.`,
-    ``,
-    `Your response (speak as ${npc.name}, deliver the truth):`,
+    `Your response (speak as ${npc.name}):`,
   ];
 
   return lines.filter(l => l !== ``).join("\n").trim();
@@ -379,6 +408,48 @@ export function buildExtractionPrompt(
     ``,
     `Player: "${playerMessage}"`,
     `NPC: "${npcReply}"`,
+  ];
+
+  return lines.join("\n").trim();
+}
+
+// ─── DEAL COMPLETION CHECK PROMPT ────────────────────────────────────────────
+// Gate 2 of hybrid completion — LLM judges whether the player's message
+// constitutes a genuine, substantive report on the deal task.
+// Returns JSON: { "pass": boolean, "reason": string }
+
+export function buildDealCompletionCheckPrompt(
+  dealGiver: string,
+  taskContext: string,
+  playerMessage: string,
+  cluesDiscovered: string[],
+  questionedOrder: string[],
+): string {
+  const recentClues = cluesDiscovered.slice(-4).join(" | ") || "none yet";
+  const visited = questionedOrder.join(", ") || "nobody yet";
+
+  const lines = [
+    `Return ONLY valid JSON, no markdown, no explanation:`,
+    `{"pass":boolean,"reason":string}`,
+    ``,
+    `You are judging whether a player message fulfills a deal task in a murder mystery game.`,
+    ``,
+    `DEAL GIVER: ${dealGiver}`,
+    `WHAT THE TASK REQUIRES: ${taskContext}`,
+    ``,
+    `PLAYER'S MESSAGE: "${playerMessage}"`,
+    ``,
+    `CONTEXT:`,
+    `- Clues player has found so far: ${recentClues}`,
+    `- NPCs player has spoken to: ${visited}`,
+    ``,
+    `JUDGMENT RULES:`,
+    `- pass: true if the message contains a genuine, specific report that addresses what the task asked for`,
+    `- pass: false if the message is vague, off-topic, too short, or clearly not addressing the task`,
+    `- pass: false if the message is just a greeting, question, or unrelated statement`,
+    `- reason: one short sentence explaining your judgment — e.g. "Player reported what the Executive said about the sale" or "Message doesn't mention anything about the casting"`,
+    `- Be lenient — if the player is clearly trying to report back and has something relevant, pass: true`,
+    `- Be strict only on completely unrelated or empty messages`,
   ];
 
   return lines.join("\n").trim();

@@ -1,9 +1,24 @@
-import { GossipEntry, NPCName, NPCState, PowerDynamic, ScenarioTemplate, SuspectName, WorldState } from "./types";
+import {
+  ConfirmedTruth,
+  GossipEntry,
+  NPCName,
+  NPCState,
+  PowerDynamic,
+  ScenarioTemplate,
+  SuspectName,
+  WorldState,
+} from "./types";
 
 // ─── FIXED CHARACTER IDENTITIES ───────────────────────────────────────────────
-// These never change between runs. This is who these people are.
 
-const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown" | "sentMessages" | "warnedAboutAqua" | "exposedDeals">> = {
+const FIXED_NPCS: Record<NPCName, Omit<NPCState,
+  | "secret"
+  | "truthsKnown"
+  | "sentMessages"
+  | "warnedAboutAqua"
+  | "exposedDeals"
+  | "completedTaskFor"
+>> = {
 
   Manager: {
     name: "Manager",
@@ -145,8 +160,6 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState, "secret" | "truthsKnown" | "sen
 };
 
 // ─── INNOCENT COVERS ──────────────────────────────────────────────────────────
-// When not the killer, each suspect gets a real human secret unrelated to murder.
-// These should feel consistent with who they are — the same person, just not guilty of this.
 
 const innocentCovers: Record<SuspectName, Array<{ secret: string; truthsKnown: string[] }>> = {
 
@@ -271,19 +284,10 @@ const innocentCovers: Record<SuspectName, Array<{ secret: string; truthsKnown: s
   ],
 };
 
-// ─── SCENARIOS ────────────────────────────────────────────────────────────────
-// Each scenario: only one killer, specific motive, specific method.
-// The same characters — but different circumstances led here.
-
-// ─── POWER DYNAMICS ──────────────────────────────────────────────────────────
-// Each scenario picks these — they surface through gossip and unlock killer implications.
-// The gossipHints drip out when either party is questioned.
-// When hintsNeeded hints have surfaced, killerImplication unlocks as a confirmed clue.
+// ─── POWER DYNAMICS ───────────────────────────────────────────────────────────
 
 function buildPowerDynamics(killer: SuspectName): PowerDynamic[] {
-  const all: PowerDynamic[] = [
-
-    // ── MANAGER over COIDOL ───────────────────────────────────────────────
+  return [
     {
       id: "manager_controls_coidol",
       holder: "Manager",
@@ -303,8 +307,6 @@ function buildPowerDynamics(killer: SuspectName): PowerDynamic[] {
       hintsCollected: 0,
       exposed: false,
     },
-
-    // ── EXECUTIVE over MANAGER ────────────────────────────────────────────
     {
       id: "executive_owns_manager",
       holder: "Executive",
@@ -324,8 +326,6 @@ function buildPowerDynamics(killer: SuspectName): PowerDynamic[] {
       hintsCollected: 0,
       exposed: false,
     },
-
-    // ── DIRECTOR owes EXECUTIVE ───────────────────────────────────────────
     {
       id: "director_indebted_executive",
       holder: "Executive",
@@ -345,8 +345,6 @@ function buildPowerDynamics(killer: SuspectName): PowerDynamic[] {
       hintsCollected: 0,
       exposed: false,
     },
-
-    // ── EXECUTIVE over FAN ────────────────────────────────────────────────
     {
       id: "executive_surveilled_fan",
       holder: "Executive",
@@ -366,12 +364,10 @@ function buildPowerDynamics(killer: SuspectName): PowerDynamic[] {
       hintsCollected: 0,
       exposed: false,
     },
-
-    // ── COIDOL rivalry with AI ────────────────────────────────────────────
     {
       id: "coidol_ai_rivalry",
       holder: "CoIdol",
-      subject: "CoIdol",  // self-directed dynamic — about her internal state
+      subject: "CoIdol",
       description: "The co-idol's entire professional identity was built in Ai's shadow. Every success Ai had cost the co-idol something.",
       gossipHints: [
         "People on set said the atmosphere between Ai and the co-idol had been cold for months — something changed after the last tour.",
@@ -386,14 +382,9 @@ function buildPowerDynamics(killer: SuspectName): PowerDynamic[] {
       exposed: false,
     },
   ];
-
-  // Return all dynamics — they're all relevant regardless of killer
-  // The killerImplication is tailored per killer so whichever ones surface point correctly
-  return all;
 }
 
-// ─── SIDE DEAL POOLS ─────────────────────────────────────────────────────────
-// Each scenario picks from these. They surface when related clues are found.
+// ─── SIDE DEAL POOLS ──────────────────────────────────────────────────────────
 
 function buildSideDeals() {
   return [
@@ -440,6 +431,8 @@ function buildSideDeals() {
   ];
 }
 
+// ─── SCENARIOS ────────────────────────────────────────────────────────────────
+
 const scenarios: ScenarioTemplate[] = [
 
   // ══ MANAGER ══════════════════════════════════════════════════════════════════
@@ -449,6 +442,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Manager",
     motive: "Ai discovered the manager had been skimming a percentage of her earnings for years — quietly, methodically, in ways she couldn't have found without help. She found help. She had a lawyer. The appointment was Monday.",
     method: "He let himself in with his spare key, disabled the security camera he'd installed himself, and strangled her — staging the scene to look like a break-in gone wrong.",
+    methodClue: "Manual strangulation. No forced entry. One camera offline.",
     truthSummary: [
       "The financial fraud is real and documentable if anyone examines the right accounts.",
       "The fan was outside that night but arrived after — he saw nothing useful.",
@@ -479,6 +473,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Manager",
     motive: "Ai had been writing a memoir. The manager accessed her laptop remotely and read it. She described thirteen years of his management as a cage. He went to reason with her. She wouldn't be reasoned with.",
     method: "He arrived during the gap in her schedule he knew by heart, got in with his key, and beat her to death with a paperweight from her own desk — the memoir still open on her laptop behind him.",
+    methodClue: "Blunt force. No sign of a break-in. A desktop object used as a weapon.",
     truthSummary: [
       "The remote laptop access is logged and traceable by anyone who knows to look.",
       "The co-idol knew Ai was writing something — Ai had mentioned it — but promised not to tell.",
@@ -509,6 +504,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Manager",
     motive: "Ai had told him she was quitting B-Komachi after the next tour. Not after Tokyo Dome. Before it. The dream he'd built his entire life around was being cancelled and she'd already made the decision without him.",
     method: "She let him in because she always did — and he strangled her in the hallway during an argument about Tokyo Dome that she refused to lose.",
+    methodClue: "Strangled in the hallway. No forced entry. She let someone in.",
     truthSummary: [
       "Ai had drafted a formal withdrawal from B-Komachi — Ruby found the draft.",
       "The co-idol knew Ai was thinking about leaving — Ai had told her in confidence.",
@@ -541,6 +537,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "CoIdol",
     motive: "Ai had signed a solo deal and an acting contract that would end B-Komachi entirely. The co-idol found out from the director — carelessly mentioned, as he does everything. Six years of her life was going to end because Ai decided to move on without telling her.",
     method: "After forty minutes of argument, she grabbed Ai by the throat in the kitchen and didn't let go until it was over.",
+    methodClue: "Manual strangulation. Kitchen. Signs of a prolonged struggle.",
     truthSummary: [
       "The solo contract was real and signed. Ai hadn't told the group yet.",
       "The director told the co-idol and has been carrying quiet guilt about that since.",
@@ -571,6 +568,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "CoIdol",
     motive: "Ai had discovered that the co-idol had been quietly sabotaging her auditions for over a year — calling casting directors, redirecting opportunities, planting doubts. She'd compiled the evidence and taken it to the executive. A formal review had been scheduled.",
     method: "When Ai refused to drop the complaint, the co-idol smashed a vase from their joint shoot over her head in the hallway.",
+    methodClue: "Blunt force to the head. A ceramic object, broken at the scene.",
     truthSummary: [
       "The sabotage was systematic and documented over more than a year.",
       "The executive had received Ai's evidence and begun an internal process.",
@@ -601,6 +599,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "CoIdol",
     motive: "Ai had been offered — and accepted — a role that the co-idol had auditioned for and been passed over on. The same week, a journalist published a profile of Ai that described the co-idol as 'the group's quiet backbone' — industry language for invisible. Something broke.",
     method: "Drunk and beyond control, she beat Ai with a kitchen object during a screaming fight that started at the front door and ended on the kitchen floor.",
+    methodClue: "Blunt force. Kitchen floor. Neighbours reported shouting beforehand.",
     truthSummary: [
       "The casting decision was real — the co-idol had auditioned and was in serious consideration before Ai was approached.",
       "The article was published three days before Ai died — the co-idol kept a copy.",
@@ -633,6 +632,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Director",
     motive: "Ai had witnessed the director in a situation with a younger trainee that he could not explain and could not survive publicly. She'd given him three days to come forward himself. He spent those three days making other plans.",
     method: "He came through the service entrance using a fake name, stabbed her once in the hallway, and staged the scene — but staged it too cleanly, which is what gave him away.",
+    methodClue: "Single stab wound, hallway. Scene disturbed — but arranged, not chaotic.",
     truthSummary: [
       "The trainee exists, is alive, and has not spoken to anyone official because they're terrified.",
       "The manager received an unexplained payment from an agency account six weeks ago — doesn't know what it was for.",
@@ -663,6 +663,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Director",
     motive: "Ai had production files proving the director had fraudulently credited himself on multiple significant works. She'd been sitting on it for two years. Then she told him she was writing a book. She'd been saving it for the book.",
     method: "He broke in to steal the files, she came home early and caught him, and he strangled her with the power cable from her own monitor.",
+    methodClue: "Ligature strangulation. Cable from a home device. Filing cabinet disturbed.",
     truthSummary: [
       "The files existed. They're gone. But Ai made secondary copies the director doesn't know about.",
       "The co-idol knew Ai had 'something' she'd been holding — Ai had mentioned it without details.",
@@ -693,6 +694,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Director",
     motive: "Ai had discovered something about Aqua's past — something connected to the circumstances of his birth — and was going to go public with it. The director believed it would destroy Aqua. He made a decision Aqua will never know he made.",
     method: "She trusted him enough to turn her back during the conversation — he used that moment, and used his hands, and was gone before she hit the floor.",
+    methodClue: "Manual strangulation. No struggle. She was facing away.",
     truthSummary: [
       "The information about Aqua's past was real and Ai had verified it.",
       "The journalist contact exists — Ruby found an email thread that has since been deleted.",
@@ -725,6 +727,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Fan",
     motive: "Someone spent eight months building him up online — feeding him the story that the industry was destroying Ai, that she was being exploited and suppressed, that a real fan would do something real. He believed them. He doesn't know who they were.",
     method: "He waited outside her house at the time he knew she'd return alone, and stabbed her at the front door before she could close it.",
+    methodClue: "Single stab wound, front door. She had just arrived home.",
     truthSummary: [
       "The anonymous account that radicalised him is gone now but the messages on his phone survive.",
       "The manager had a security escalation report about the fan filed six weeks ago — he didn't act on it.",
@@ -755,6 +758,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Fan",
     motive: "He received a screenshot of Ai mocking him to a friend — dismissive, cruel, specific. He read it two hundred times. It never occurred to him to question whether it was real.",
     method: "He showed up at 11pm with the screenshot on his phone, she denied writing it, and he stabbed her in the doorway — the printout still in his jacket when police found him.",
+    methodClue: "Knife wound, doorway. A printed document recovered at the scene.",
     truthSummary: [
       "The screenshot was fabricated — manufactured and sent to him deliberately by someone who needed a scapegoat.",
       "The director has the technical knowledge and an existing reason to want chaos around Ai.",
@@ -785,6 +789,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Fan",
     motive: "His obsession had been building for years into something that had its own logic — a private story in which Ai needed him, in which his love was special and reciprocal, in which the distance between them was just circumstance. He went to close the distance.",
     method: "She answered the door without fear because she recognised him from fan events — and he stabbed her before either of them understood what he was doing.",
+    methodClue: "Stab wound, front door. No sign she tried to close it.",
     truthSummary: [
       "He had been to the street outside the house at least four times in the month before Ai died.",
       "The manager had received two separate security flags about the fan and had not escalated either.",
@@ -815,6 +820,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Fan",
     motive: "The fan had always known Ai as a performer — untouchable, distant, a dream. Then a man contacted him claiming to be the biological father of Ai's children, furious that Ai had hidden them and built a public image of purity on top of it. He gave the fan an address. He said Ai had been lying to everyone who loved her. The fan had built his entire emotional life on that love. The lie shattered it.",
     method: "He went to the address the father gave him. He brought a knife — not because he planned to use it, he would tell you, but because the city is dangerous at night and he always carries one. Ai opened the door. He showed her a photo the father had sent — Ai with two small children, clearly hers, clearly hidden. She didn't deny it. She asked him to come inside and talk. He didn't go inside. What happened in the doorway took less than thirty seconds. He was on the train home before anyone called an emergency number.",
+    methodClue: "Knife wound, doorway. Over in under a minute. No signs of a struggle.",
     truthSummary: [
       "A man identifying himself as the biological father of Ai's children gave the fan her home address and photographic evidence of the children.",
       "The father's motive was to expose Ai's hidden life — the children represent a secret she'd maintained throughout her career.",
@@ -863,6 +869,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Executive",
     motive: "Ai had spent months building a file — names, dates, locations, evidence of systematic exploitation of trainees at agency-affiliated events. She had a journalist and a publication date. He had a week.",
     method: "He hired someone to kill her and make it look like the fan did it — he was in Osaka with forty witnesses when it happened.",
+    methodClue: "Contracted killing. The perpetrator was not the architect.",
     truthSummary: [
       "The file Ai was building was real. Parts of it still exist — Ruby found a handwritten list.",
       "The manager had been kept comfortable and incurious. He didn't know what his silence was covering.",
@@ -893,6 +900,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Executive",
     motive: "Ai had signed a defection contract with a rival agency. The terms included a clause allowing three other B-Komachi members to follow her within sixty days. The agency would not survive losing four artists simultaneously.",
     method: "He spent six weeks engineering the fan as a scapegoat, then paid a contractor to kill her — his alibi was airtight because he'd built it in advance.",
+    methodClue: "Contracted killing. An alibi constructed weeks in advance.",
     truthSummary: [
       "The defection contract was countersigned — Ruby found a copy in Ai's things.",
       "The manager knew and was devastated. His grief is real. His complicity in other things is also real.",
@@ -923,6 +931,7 @@ const scenarios: ScenarioTemplate[] = [
     killer: "Executive",
     motive: "Ai had uncovered documentation of a financial crime from fifteen years ago — before he joined the agency, before everything. She wasn't going to go to the police. She was going to give it to Aqua. She thought Aqua had a right to know because it connected to his father.",
     method: "He arranged a private meeting at her home, brought a man from his security firm, and left after twenty minutes — the second man followed four minutes later.",
+    methodClue: "Two visitors logged that evening. One left. The other did not leave immediately.",
     truthSummary: [
       "The documentation Ai found was real and connected to Aqua's origins in ways the executive cannot afford to have examined.",
       "The director knew about the historical crime — was peripherally connected to it — and has been terrified since Ai died.",
@@ -949,10 +958,7 @@ const scenarios: ScenarioTemplate[] = [
   },
 ];
 
-// ─── GOSSIP POOL BUILDER ─────────────────────────────────────────────────────
-// Generates a pre-determined pool of gossip from scenario data.
-// All entries are killer-specific because they come from globalClues + truthSummary.
-// Released one per turn so the player gets reliable breadcrumbs throughout the game.
+// ─── GOSSIP POOL BUILDER ──────────────────────────────────────────────────────
 
 function buildGossipPool(scenario: ScenarioTemplate): GossipEntry[] {
   const sources = [
@@ -961,8 +967,7 @@ function buildGossipPool(scenario: ScenarioTemplate): GossipEntry[] {
     "entertainment blog", "Ruby overheard",
   ] as const;
 
-  const pool: GossipEntry[] = [
-    // Turn 0 — atmosphere entries, always present
+  return [
     {
       turn: 0,
       text: "Fan forums are in chaos. Ai Hoshino found dead at her home. No official cause of death released.",
@@ -975,14 +980,12 @@ function buildGossipPool(scenario: ScenarioTemplate): GossipEntry[] {
       source: "industry contact",
       relatedTo: "Executive",
     },
-    // Global clues rephrased as leaks — all point at the killer
     ...scenario.globalClues.map((clue, i) => ({
-      turn: -1, // -1 = queued, released progressively during gameplay
-      text: rephrasedAsGossip(clue, scenario.killer, i),
+      turn: -1,
+      text: rephrasedAsGossip(clue, i),
       source: sources[(i + 2) % sources.length],
       relatedTo: scenario.killer as NPCName,
     })),
-    // Truth summary entries — deeper context that surfaces later
     ...scenario.truthSummary.map((truth, i) => ({
       turn: -1,
       text: rephrasedAsTruthLeak(truth, i),
@@ -990,29 +993,25 @@ function buildGossipPool(scenario: ScenarioTemplate): GossipEntry[] {
       relatedTo: scenario.killer as NPCName,
     })),
   ];
-
-  return pool;
 }
 
-// Rephrase a direct clue as something overheard or leaked
-function rephrasedAsGossip(clue: string, killer: SuspectName, index: number): string {
+function rephrasedAsGossip(clue: string, index: number): string {
   const prefixes = [
-    `Word reaching rival agencies: `,
-    `A source close to the investigation says `,
-    `Circulating in industry group chats: `,
-    `A B-Komachi staff member mentioned off the record that `,
-    `Fan investigators online have noted that `,
+    "Word reaching rival agencies: ",
+    "A source close to the investigation says ",
+    "Circulating in industry group chats: ",
+    "A B-Komachi staff member mentioned off the record that ",
+    "Fan investigators online have noted that ",
   ];
   return prefixes[index % prefixes.length] + clue.charAt(0).toLowerCase() + clue.slice(1);
 }
 
-// Rephrase a truth summary as an indirect industry leak
 function rephrasedAsTruthLeak(truth: string, index: number): string {
   const prefixes = [
-    `Someone close to Ai told a mutual contact that `,
-    `Industry insiders are quietly saying that `,
-    `Ruby overheard something at the agency: `,
-    `A stylist who worked with B-Komachi says `,
+    "Someone close to Ai told a mutual contact that ",
+    "Industry insiders are quietly saying that ",
+    "Ruby overheard something at the agency: ",
+    "A stylist who worked with B-Komachi says ",
   ];
   return prefixes[index % prefixes.length] + truth.charAt(0).toLowerCase() + truth.slice(1);
 }
@@ -1022,6 +1021,7 @@ function rephrasedAsTruthLeak(truth: string, index: number): string {
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
+
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
 }
@@ -1030,18 +1030,17 @@ export function createNewGame(): WorldState {
   const selected = pick(scenarios);
   const killer = selected.killer;
   const suspectNames: SuspectName[] = ["Manager", "CoIdol", "Director", "Fan", "Executive"];
+  const allNPCNames: NPCName[] = ["Manager", "CoIdol", "Director", "Fan", "Executive", "Ruby"];
 
   const npcs = deepClone(FIXED_NPCS) as Record<NPCName, NPCState>;
 
-  // Initialise fields that were Omitted from FIXED_NPCS
-  const allNPCNames: NPCName[] = ["Manager", "CoIdol", "Director", "Fan", "Executive", "Ruby"];
   for (const name of allNPCNames) {
     npcs[name].sentMessages = [];
     npcs[name].warnedAboutAqua = false;
     npcs[name].exposedDeals = [];
+    npcs[name].completedTaskFor = [];
   }
 
-  // Assign secrets and truthsKnown based on role this run
   for (const name of suspectNames) {
     if (name === killer) {
       const override = selected.npcOverrides[name];
@@ -1056,9 +1055,6 @@ export function createNewGame(): WorldState {
     }
   }
 
-  // Ruby has no secret or truthsKnown — she's Aqua's ally, not a suspect
-
-  // Slightly randomise starting trust/suspicion so each run feels fresh
   for (const name of suspectNames) {
     npcs[name].trustPlayer = Math.min(0.95, Math.max(0.1,
       (FIXED_NPCS[name].trustPlayer as number) + (Math.random() * 0.2 - 0.1)
@@ -1080,6 +1076,7 @@ export function createNewGame(): WorldState {
     killer: selected.killer,
     motive: selected.motive,
     method: selected.method,
+    methodClue: selected.methodClue,
     truthSummary: selected.truthSummary,
     globalClues: selected.globalClues,
     cluesDiscovered: [],
@@ -1099,5 +1096,4 @@ export function createNewGame(): WorldState {
     questionedOrder: [],
     npcs,
   };
-
 }

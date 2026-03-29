@@ -205,6 +205,8 @@ export default function HomePage() {
   } | null>(null);
   // Deal reveal cinematic
   const [dealReveal, setDealReveal] = useState<DealFulfilledPayload | null>(null);
+  // Soft hint when Gate 1 passed but Gate 2 failed
+  const [dealHint, setDealHint] = useState<string | null>(null);
 
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const [sceneRect, setSceneRect] = useState({ width: SCENE_WIDTH, height: SCENE_HEIGHT });
@@ -346,6 +348,12 @@ export default function HomePage() {
     // Deal reveal cinematic fires after NPC speaks
     if (data.dealFulfilled) {
       setTimeout(() => setDealReveal(data.dealFulfilled), 400);
+    }
+
+    // Soft hint — Gate 1 passed but Gate 2 failed, player needs to be more specific
+    if (data.dealHint) {
+      setDealHint(data.dealHint);
+      setTimeout(() => setDealHint(null), 6000);
     }
 
     setLoading(false);
@@ -540,6 +548,23 @@ export default function HomePage() {
             <button className="icon-btn" onClick={() => setNotebookOpen(false)}>✕</button>
           </div>
           <div className="nb-body">
+
+            {/* ── Scene Clues — always visible, drawn from scenario.globalClues ── */}
+            <div className="nb-section">
+              <h4>▸ KNOWN FROM THE SCENE</h4>
+              {(worldState.globalClues ?? []).slice(0, 3).map((clue, i) => (
+                <div key={i} className="nb-scene-clue">
+                  <span className="nb-scene-bullet">◆</span>
+                  <span className="nb-scene-text">{clue}</span>
+                </div>
+              ))}
+              <div className="nb-scene-clue" style={{ marginTop: "8px" }}>
+                <span className="nb-scene-bullet" style={{ color: "#ff4a6a" }}>◆</span>
+                <span className="nb-scene-text" style={{ color: "#ff8a6a" }}>{worldState.methodClue}</span>
+              </div>
+            </div>
+
+            <div className="nb-hr" />
 
             {/* ── Active Deals ── */}
             <div className="nb-section">
@@ -815,6 +840,20 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* ── Deal hint toast — Gate 1 passed, Gate 2 failed ── */}
+      {dealHint && (
+        <div style={{
+          position: "fixed", top: "52px", left: "50%", transform: "translateX(-50%)",
+          zIndex: 301, background: "#0e0220", border: "1px solid #7c3aed",
+          padding: "8px 16px", maxWidth: "520px",
+          fontFamily: "'Press Start 2P', monospace", fontSize: "7px",
+          color: "#a78bfa", letterSpacing: "0.06em", lineHeight: "1.8",
+          boxShadow: "0 0 20px #7c3aed33",
+        }}>
+          ❖ NOT QUITE — {dealHint}
+        </div>
+      )}
+
       {/* ── Ending ── */}
       {worldState.gameOver && (
         <div style={{
@@ -986,6 +1025,11 @@ export default function HomePage() {
         .nb-truth { margin-bottom:10px; padding:8px 10px; border:1px solid #f472b633; background:#0e0420; }
         .nb-truth-source { font-family:'Press Start 2P',monospace; font-size:6px; color:#f472b6; margin-bottom:4px; letter-spacing:0.06em; }
         .nb-truth-text { font-family:'VT323',monospace; font-size:16px; color:#f0e8ff; line-height:1.4; }
+
+        /* Scene clues — permanent, drawn from scenario.globalClues */
+        .nb-scene-clue { display:flex; gap:6px; align-items:flex-start; margin-bottom:7px; }
+        .nb-scene-bullet { color:#f0c070; flex-shrink:0; font-size:14px; line-height:1.4; }
+        .nb-scene-text { font-family:'VT323',monospace; font-size:15px; color:#f0c070; line-height:1.4; }
 
         /* Dialog */
         .dlg-wrap { position:fixed; bottom:0; left:0; right:0; z-index:200; display:flex; flex-direction:column; background:#0e0418; border-top:2px solid #7c3aed; box-shadow:0 -4px 32px rgba(124,58,237,0.2); }
