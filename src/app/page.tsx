@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NPCName, SuspectName, WorldState } from "@/lib/types";
+import { NPCName, SuspectName, WorldState, DealFulfilledPayload, ConfirmedTruth } from "@/lib/types";
 
 interface LocalMessage {
   speaker: "user" | "npc";
@@ -13,13 +13,13 @@ type Facing = "left" | "right";
 const SCENE_WIDTH = 1056;
 const SCENE_HEIGHT = 584;
 const PLAYER_SIZE = 54;
-const MOVE_SPEED = 4.5;
+const MOVE_SPEED = 5;
 const TALK_DISTANCE = 90;
 
-const WALK_MIN_X = 80;
-const WALK_MAX_X = 980;
-const WALK_MIN_Y = 380;
-const WALK_MAX_Y = 505;
+const WALK_MIN_X = 100;
+const WALK_MAX_X = 1300;
+const WALK_MIN_Y = 480;
+const WALK_MAX_Y = 650;
 
 const initialMessages: Record<NPCName, LocalMessage[]> = {
   Manager: [],
@@ -45,12 +45,12 @@ const npcSpriteMap: Record<NPCName, string> = {
 };
 
 const npcPositions: Record<NPCName, { x: number; y: number }> = {
-  Director: { x: 250, y: 360 },
-  Fan: { x: 800, y: 380 },
-  Manager: { x: 165, y: 455 },
-  Executive: { x: 900, y: 455 },
-  CoIdol: { x: 520, y: 335 },
-  Ruby: { x: 635, y: 445 },
+  Director: { x: 1320, y: 530 },
+  Fan: { x: 1200, y: 735 },
+  Manager: { x: 385, y: 500 },
+  Executive: { x: 430, y: 500 },
+  CoIdol: { x: 520, y: 650 },
+  Ruby: { x: 720, y: 600 },
 };
 
 function clamp(n: number, min: number, max: number) {
@@ -58,6 +58,133 @@ function clamp(n: number, min: number, max: number) {
 }
 function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+}
+
+// ── Deal cinematic overlay ────────────────────────────────────────────────────
+function DealRevealCinematic({
+  payload,
+  onClose,
+}: {
+  payload: DealFulfilledPayload;
+  onClose: () => void;
+}) {
+  const [phase, setPhase] = useState<"enter" | "reveal" | "truth" | "out">("enter");
+
+  useEffect(() => {
+    // Phase 1 → reveal after 600ms
+    const t1 = setTimeout(() => setPhase("reveal"), 600);
+    // Phase 2 → show truth after 1800ms
+    const t2 = setTimeout(() => setPhase("truth"), 1800);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 800,
+        background: "rgba(4,0,10,0.97)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexDirection: "column", gap: "0",
+        fontFamily: "'Press Start 2P', monospace",
+        cursor: "pointer",
+        animation: "cinematic-in 0.4s ease forwards",
+      }}
+      onClick={onClose}
+    >
+      {/* CRT */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.18) 3px,rgba(0,0,0,0.18) 4px)", zIndex: 2 }} />
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at center,transparent 30%,rgba(4,0,10,0.9) 100%)", zIndex: 3 }} />
+
+      <div style={{
+        position: "relative", zIndex: 10,
+        maxWidth: "680px", width: "90%",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "32px",
+        padding: "48px 40px",
+        border: "2px solid #f472b644",
+        background: "rgba(14,4,24,0.98)",
+        boxShadow: "0 0 80px #f472b622, 0 0 160px #f472b611",
+      }}>
+        {/* Source label */}
+        <div style={{
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: "7px", color: "#6b3080", letterSpacing: "0.2em",
+          opacity: phase === "enter" ? 0 : 1,
+          transition: "opacity 0.5s ease",
+        }}>
+          ❖ {payload.npcName.toUpperCase()} KEEPS THEIR WORD
+        </div>
+
+        {/* Divider */}
+        <div style={{
+          width: phase === "enter" ? "0px" : "100%",
+          height: "1px", background: "#f472b633",
+          transition: "width 0.8s ease",
+        }} />
+
+        {/* The truth */}
+        <div style={{
+          fontFamily: "'VT323', monospace",
+          fontSize: "26px", color: "#f0e8ff",
+          lineHeight: "1.6", textAlign: "center",
+          letterSpacing: "0.03em",
+          opacity: phase === "truth" ? 1 : 0,
+          transform: phase === "truth" ? "translateY(0)" : "translateY(12px)",
+          transition: "opacity 0.7s ease, transform 0.7s ease",
+          maxWidth: "560px",
+        }}>
+          "{payload.truth}"
+        </div>
+
+        {/* Source attribution */}
+        <div style={{
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: "6px", color: "#f472b6",
+          letterSpacing: "0.12em",
+          opacity: phase === "truth" ? 1 : 0,
+          transition: "opacity 0.7s ease 0.4s",
+        }}>
+          — {payload.npcName.toUpperCase()}
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: "100%", height: "1px", background: "#f472b633", opacity: phase === "truth" ? 1 : 0, transition: "opacity 0.5s ease 0.6s" }} />
+
+        {/* Confirmed truth badge */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: "10px",
+          opacity: phase === "truth" ? 1 : 0,
+          transition: "opacity 0.6s ease 0.8s",
+        }}>
+          <span style={{ fontSize: "10px", color: "#f472b6" }}>★</span>
+          <span style={{
+            fontFamily: "'Press Start 2P', monospace",
+            fontSize: "7px", color: "#c084fc", letterSpacing: "0.1em",
+          }}>CONFIRMED TRUTH ADDED TO NOTEBOOK</span>
+          <span style={{ fontSize: "10px", color: "#f472b6" }}>★</span>
+        </div>
+
+        {/* Dismiss hint */}
+        <div style={{
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: "6px", color: "#3a1050", letterSpacing: "0.1em",
+          animation: "blink 1.2s step-end infinite",
+          opacity: phase === "truth" ? 1 : 0,
+          transition: "opacity 0.4s ease 1.2s",
+          marginTop: "8px",
+        }}>
+          CLICK TO CONTINUE
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes cinematic-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes blink { 0%,100%{opacity:1}50%{opacity:0} }
+      `}</style>
+    </div>
+  );
 }
 
 export default function HomePage() {
@@ -72,6 +199,12 @@ export default function HomePage() {
   const [typingNPC, setTypingNPC] = useState<NPCName | null>(null);
   const [notebookOpen, setNotebookOpen] = useState(false);
   const [elicitationToast, setElicitationToast] = useState<string | null>(null);
+  const [barterOffer, setBarterOffer] = useState<{
+    npcName: string; offer: string; asking: string;
+    taskTarget: string | null; truthIndex: number;
+  } | null>(null);
+  // Deal reveal cinematic
+  const [dealReveal, setDealReveal] = useState<DealFulfilledPayload | null>(null);
 
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const [sceneRect, setSceneRect] = useState({ width: SCENE_WIDTH, height: SCENE_HEIGHT });
@@ -87,7 +220,6 @@ export default function HomePage() {
     });
   }, []);
 
-  // Dismiss intro on any keypress
   useEffect(() => {
     if (!showIntro) return;
     const handler = () => setShowIntro(false);
@@ -95,14 +227,10 @@ export default function HomePage() {
     return () => window.removeEventListener("keydown", handler);
   }, [showIntro]);
 
-  // auto-scroll chat to bottom whenever messages change
   useEffect(() => {
     const el = chatLogRef.current;
     if (!el) return;
-    // requestAnimationFrame ensures DOM has painted before we scroll
-    requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-    });
+    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
   }, [messages, selectedNPC, typingNPC]);
 
   useEffect(() => {
@@ -142,7 +270,10 @@ export default function HomePage() {
       const isTyping = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
       if (isTyping) { if (e.key === "Escape") setSelectedNPC(null); return; }
       if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","a","A","d","D","w","W","s","S","e","E","n","N","Escape"].includes(e.key)) e.preventDefault();
-      if (e.key === "e" || e.key === "E") { if (nearbyNPC && !selectedNPC) { setSelectedNPC(nearbyNPC); setTimeout(() => inputRef.current?.focus(), 0); } return; }
+      if (e.key === "e" || e.key === "E") {
+        if (nearbyNPC && !selectedNPC) { setSelectedNPC(nearbyNPC); setTimeout(() => inputRef.current?.focus(), 0); }
+        return;
+      }
       if (e.key === "n" || e.key === "N") { setNotebookOpen(v => !v); return; }
       if (e.key === "Escape") { setSelectedNPC(null); setNotebookOpen(false); return; }
       pressedKeys.current.add(e.key);
@@ -178,7 +309,11 @@ export default function HomePage() {
     let current = "";
     for (let i = 0; i < words.length; i++) {
       current += (i === 0 ? "" : " ") + words[i];
-      setMessages(prev => { const arr = [...prev[npcName]]; arr[arr.length - 1] = { speaker: "npc", text: current }; return { ...prev, [npcName]: arr }; });
+      setMessages(prev => {
+        const arr = [...prev[npcName]];
+        arr[arr.length - 1] = { speaker: "npc", text: current };
+        return { ...prev, [npcName]: arr };
+      });
       await new Promise(r => setTimeout(r, 24));
     }
     setTypingNPC(null);
@@ -188,21 +323,42 @@ export default function HomePage() {
     if (!worldState || !selectedNPC || !input.trim() || loading || worldState.gameOver) return;
     const msg = input.trim(); setInput(""); setLoading(true);
     setMessages(prev => ({ ...prev, [selectedNPC]: [...prev[selectedNPC], { speaker: "user", text: msg }] }));
-    const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ npcName: selectedNPC, playerMessage: msg, worldState }) });
+
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ npcName: selectedNPC, playerMessage: msg, worldState }),
+    });
     const data = await res.json();
     setWorldState(data.updatedWorldState);
+
     if (data.elicitationFeedback) {
       setElicitationToast(data.elicitationFeedback);
       setTimeout(() => setElicitationToast(null), 5000);
     }
+    if (data.barterOffer) {
+      setBarterOffer(data.barterOffer);
+    }
+
+    // Type the NPC reply first, then trigger cinematic
     await typeNPCMessage(selectedNPC, data.reply);
+
+    // Deal reveal cinematic fires after NPC speaks
+    if (data.dealFulfilled) {
+      setTimeout(() => setDealReveal(data.dealFulfilled), 400);
+    }
+
     setLoading(false);
   }
 
   async function askRubyForHelp() {
     if (!worldState || loading || worldState.gameOver) return;
     setLoading(true);
-    const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ npcName: "Ruby", playerMessage: "Help me summarize the case.", rubyHelp: true, worldState }) });
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ npcName: "Ruby", playerMessage: "Help me summarize the case.", rubyHelp: true, worldState }),
+    });
     const data = await res.json();
     await typeNPCMessage("Ruby", data.reply);
     setLoading(false);
@@ -211,24 +367,32 @@ export default function HomePage() {
   async function killNPC(npcName: SuspectName) {
     if (!worldState || loading || worldState.gameOver) return;
     setLoading(true);
-    const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ npcName, kill: npcName, playerMessage: "", worldState }) });
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ npcName, kill: npcName, playerMessage: "", worldState }),
+    });
     const data = await res.json();
-    // Always show the end screen — never auto-reset
-    // updatedWorldState comes back with gameOver: true whether win or lose
     if (data.updatedWorldState) {
       setWorldState(data.updatedWorldState);
     } else {
-      // Fallback: manually set gameOver on current state
-      setWorldState({
-        ...worldState,
-        gameOver: true,
-        winner: data.reply?.includes("win") ?? false,
-      });
+      setWorldState({ ...worldState, gameOver: true, winner: data.reply?.includes("win") ?? false });
     }
     setSelectedNPC(null);
     setLoading(false);
   }
 
+  // ── Derived deal state ─────────────────────────────────────────────────────
+  const pendingDeals = (worldState?.activeDeals ?? []).filter(d => d.status === "pending");
+  const completedDeals = (worldState?.activeDeals ?? []).filter(d => d.status === "fulfilled");
+  const confirmedTruths: ConfirmedTruth[] = worldState?.confirmedTruths ?? [];
+
+  // Has the selected NPC given a pending deal that needs the player to visit a target first?
+  const activeDealForCurrentNPC = selectedNPC
+    ? pendingDeals.find(d => d.npcName === selectedNPC)
+    : null;
+
+  // ── Intro screens ──────────────────────────────────────────────────────────
   if (showIntro && worldState) return (
     <main style={{
       width:"100vw", height:"100vh", background:"#100818",
@@ -242,160 +406,40 @@ export default function HomePage() {
         @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
         @keyframes pulse-glow{0%,100%{text-shadow:0 0 20px #f472b6aa}50%{text-shadow:0 0 40px #f472b6,0 0 80px #f472b644}}
       `}</style>
-
-      {/* CRT */}
       <div style={{position:"fixed",inset:0,pointerEvents:"none",background:"repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.15) 3px,rgba(0,0,0,0.15) 4px)",zIndex:5}} />
       <div style={{position:"fixed",inset:0,pointerEvents:"none",background:"radial-gradient(ellipse at center,transparent 40%,rgba(8,2,16,0.88) 100%)",zIndex:6}} />
-
-      <div style={{
-        position:"relative", zIndex:10,
-        display:"flex", flexDirection:"column", alignItems:"center",
-        gap:"40px", padding:"40px", maxWidth:"680px", textAlign:"center",
-      }}>
-        {/* Star */}
-        <div style={{
-          fontSize:"36px", color:"#f472b6",
-          animation:"pulse-glow 2s ease-in-out infinite",
-          animationDelay:"0.5s",
-          opacity:0, animationFillMode:"forwards",
-        }}>★</div>
-
-        {/* Main text — each line fades in with delay */}
+      <div style={{ position:"relative", zIndex:10, display:"flex", flexDirection:"column", alignItems:"center", gap:"40px", padding:"40px", maxWidth:"680px", textAlign:"center" }}>
+        <div style={{ fontSize:"36px", color:"#f472b6", animation:"pulse-glow 2s ease-in-out infinite", animationDelay:"0.5s", opacity:0, animationFillMode:"forwards" }}>★</div>
         <div style={{display:"flex",flexDirection:"column",gap:"20px",width:"100%"}}>
-          <div style={{
-            fontSize:"10px", color:"#f0e8ff", letterSpacing:"0.15em", lineHeight:"2",
-            animation:"fadeInUp 0.8s ease forwards",
-            animationDelay:"0.3s", opacity:0,
-          }}>
-            AI HOSHINO HAS BEEN FOUND DEAD
-          </div>
-          <div style={{
-            fontSize:"10px", color:"#f0e8ff", letterSpacing:"0.15em", lineHeight:"2",
-            animation:"fadeInUp 0.8s ease forwards",
-            animationDelay:"1s", opacity:0,
-          }}>
-            AT THE FRONT OF THE HOUSE.
-          </div>
-          <div style={{
-            fontSize:"9px", color:"#c084fc", letterSpacing:"0.12em", lineHeight:"2",
-            animation:"fadeInUp 0.8s ease forwards",
-            animationDelay:"1.8s", opacity:0,
-          }}>
-            ON THE DAY SHE WOULD PERFORM AT TOKYO DOME.
-          </div>
-
-          {/* Divider */}
-          <div style={{
-            width:"60px", height:"1px", background:"#f472b644",
-            margin:"4px auto",
-            animation:"fadeInUp 0.8s ease forwards",
-            animationDelay:"2.4s", opacity:0,
-          }} />
-
-          <div style={{
-            fontSize:"9px", color:"#e879f9", letterSpacing:"0.14em", lineHeight:"2",
-            animation:"fadeInUp 0.8s ease forwards",
-            animationDelay:"2.8s", opacity:0,
-          }}>
-            YOU ARE AI'S SON — AQUA HOSHINO.
-          </div>
-          <div style={{
-            fontSize:"11px", color:"#f472b6", letterSpacing:"0.2em",
-            animation:"fadeInUp 0.8s ease forwards, pulse-glow 2s ease-in-out infinite",
-            animationDelay:"3.4s", opacity:0,
-            textShadow:"0 0 20px #f472b6aa",
-          }}>
-            FIND OUT WHO DID IT.
-          </div>
+          {[
+            { text:"AI HOSHINO HAS BEEN FOUND DEAD", delay:"0.3s", color:"#f0e8ff", size:"10px" },
+            { text:"AT THE FRONT OF THE HOUSE.", delay:"1s", color:"#f0e8ff", size:"10px" },
+            { text:"ON THE DAY SHE WOULD PERFORM AT TOKYO DOME.", delay:"1.8s", color:"#c084fc", size:"9px" },
+          ].map((l, i) => (
+            <div key={i} style={{ fontSize:l.size, color:l.color, letterSpacing:"0.15em", lineHeight:"2", animation:"fadeInUp 0.8s ease forwards", animationDelay:l.delay, opacity:0 }}>{l.text}</div>
+          ))}
+          <div style={{ width:"60px", height:"1px", background:"#f472b644", margin:"4px auto", animation:"fadeInUp 0.8s ease forwards", animationDelay:"2.4s", opacity:0 }} />
+          <div style={{ fontSize:"9px", color:"#e879f9", letterSpacing:"0.14em", lineHeight:"2", animation:"fadeInUp 0.8s ease forwards", animationDelay:"2.8s", opacity:0 }}>YOU ARE AI'S SON — AQUA HOSHINO.</div>
+          <div style={{ fontSize:"11px", color:"#f472b6", letterSpacing:"0.2em", animation:"fadeInUp 0.8s ease forwards, pulse-glow 2s ease-in-out infinite", animationDelay:"3.4s", opacity:0, textShadow:"0 0 20px #f472b6aa" }}>FIND OUT WHO DID IT.</div>
         </div>
-
-        {/* Skip prompt */}
-        <div style={{
-          fontSize:"6px", color:"#3a1050", letterSpacing:"0.14em",
-          animation:"blink 1.2s step-end infinite, fadeInUp 0.8s ease forwards",
-          animationDelay:"4s", opacity:0,
-        }}>
-          CLICK ANYWHERE TO BEGIN
-        </div>
+        <div style={{ fontSize:"6px", color:"#3a1050", letterSpacing:"0.14em", animation:"blink 1.2s step-end infinite, fadeInUp 0.8s ease forwards", animationDelay:"4s", opacity:0 }}>CLICK ANYWHERE TO BEGIN</div>
       </div>
     </main>
   );
 
-  // Intro screen — shown after loading, before game
-
   if (!worldState) return (
-    <main style={{
-      width:"100vw", height:"100vh", background:"#100818",
-      display:"flex", alignItems:"center", justifyContent:"center",
-      flexDirection:"column", gap:"32px", overflow:"hidden",
-      fontFamily:"'Press Start 2P', monospace",
-    }}>
+    <main style={{ width:"100vw", height:"100vh", background:"#100818", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:"32px", overflow:"hidden", fontFamily:"'Press Start 2P', monospace" }}>
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
         html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#100818;}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
-        @keyframes flicker{0%,100%{opacity:1}92%{opacity:1}93%{opacity:.4}94%{opacity:1}96%{opacity:.6}97%{opacity:1}}
-        @keyframes scanline-scroll{from{background-position:0 0}to{background-position:0 100%}}
       `}</style>
-
-      {/* CRT scanlines */}
-      <div style={{
-        position:"fixed", inset:0, zIndex:10, pointerEvents:"none",
-        background:"repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.15) 3px,rgba(0,0,0,0.15) 4px)",
-      }} />
-      <div style={{
-        position:"fixed", inset:0, zIndex:11, pointerEvents:"none",
-        background:"radial-gradient(ellipse at center,transparent 50%,rgba(8,2,16,0.8) 100%)",
-      }} />
-
-      {/* Star */}
-      <div style={{
-        fontSize:"52px", color:"#f472b6",
-        animation:"spin 3s linear infinite",
-        textShadow:"0 0 30px #f472b6, 0 0 60px #f472b644",
-        zIndex:20,
-      }}>★</div>
-
-      {/* Title */}
-      <div style={{zIndex:20, textAlign:"center", display:"flex", flexDirection:"column", gap:"14px"}}>
-        <div style={{
-          fontSize:"13px", color:"#f472b6", letterSpacing:"0.3em",
-          textShadow:"0 0 20px #f472b6aa",
-          animation:"flicker 4s infinite",
-        }}>✦ OSHI NO KO ✦</div>
-        <div style={{fontSize:"8px", color:"#e879f9", letterSpacing:"0.2em"}}>
-          INVESTIGATION
-        </div>
+      <div style={{ fontSize:"52px", color:"#f472b6", animation:"spin 3s linear infinite", textShadow:"0 0 30px #f472b6, 0 0 60px #f472b644", zIndex:20 }}>★</div>
+      <div style={{ zIndex:20, textAlign:"center" }}>
+        <div style={{ fontSize:"13px", color:"#f472b6", letterSpacing:"0.3em" }}>✦ OSHI NO KO ✦</div>
+        <div style={{ fontSize:"8px", color:"#e879f9", letterSpacing:"0.2em", marginTop:"8px" }}>INVESTIGATION</div>
       </div>
-
-      {/* Loading bar */}
-      <div style={{zIndex:20, display:"flex", flexDirection:"column", alignItems:"center", gap:"10px"}}>
-        <div style={{
-          width:"240px", height:"6px",
-          background:"#1a0828", border:"1px solid #3a1050",
-          overflow:"hidden",
-        }}>
-          <div style={{
-            height:"100%", background:"#f472b6",
-            boxShadow:"0 0 10px #f472b6",
-            animation:"loading-bar 2s ease-in-out infinite",
-          }} />
-        </div>
-        <div style={{fontSize:"7px", color:"#6b3080", letterSpacing:"0.14em"}}>
-          LOADING INVESTIGATION
-          <span style={{animation:"blink 1s step-end infinite"}}>_</span>
-        </div>
-      </div>
-
-      <style jsx>{`
-        @keyframes loading-bar {
-          0% { width: 0%; }
-          50% { width: 100%; }
-          51% { width: 0%; }
-          100% { width: 75%; }
-        }
-      `}</style>
     </main>
   );
 
@@ -403,6 +447,14 @@ export default function HomePage() {
     <main className="shell">
       <div className="scanlines" aria-hidden />
       <div className="vignette" aria-hidden />
+
+      {/* ── Deal Reveal Cinematic ── */}
+      {dealReveal && (
+        <DealRevealCinematic
+          payload={dealReveal}
+          onClose={() => setDealReveal(null)}
+        />
+      )}
 
       {/* ── HUD ── */}
       <header className="hud">
@@ -413,6 +465,9 @@ export default function HomePage() {
           <span className="chip dim">MAIN STAGE</span>
           <span className="chip">TRN <em>{worldState.turn}</em></span>
           <span className={`chip ${worldState.tension >= 7 ? "hot" : ""}`}>TNS <em>{worldState.tension}</em></span>
+          {pendingDeals.length > 0 && (
+            <span className="chip deal-chip">❖ {pendingDeals.length} DEAL{pendingDeals.length > 1 ? "S" : ""}</span>
+          )}
           {worldState.gameOver && (
             <span className={`chip ${worldState.winner ? "win" : "lose"}`}>
               {worldState.winner ? "★ SOLVED" : "✕ FAILED"}
@@ -427,11 +482,10 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* ── Scene fills remaining height ── */}
+      {/* ── Scene ── */}
       <div className="scene-wrap">
         <div className="scene" ref={sceneRef}>
           <img src="/background/stage-bg.jpg" alt="" className="stage-bg" draggable={false} />
-
           <div className="star-overlay" aria-hidden>
             {(["★","✦","✧","★","✦"] as const).map((s, i) => (
               <span key={i} className={`sp sp${i}`}>{s}</span>
@@ -442,6 +496,7 @@ export default function HomePage() {
             const pos = npcPositions[npcName];
             const isNearby = nearbyNPC === npcName;
             const isLarge = npcName === "Director" || npcName === "Manager" || npcName === "Executive";
+            const hasPendingDeal = pendingDeals.some(d => d.npcName === npcName);
             return (
               <button
                 key={npcName}
@@ -450,7 +505,10 @@ export default function HomePage() {
                 onClick={() => { if (distance(playerPos, pos) <= TALK_DISTANCE) setSelectedNPC(npcName); }}
               >
                 <img src={npcSpriteMap[npcName]} alt={npcName} className={`sprite ${isLarge ? "lg" : ""}`} draggable={false} />
-                {isNearby && <div className="name-tag">▲ {npcName}</div>}
+                {isNearby && <div className="name-tag">▲ {npcName}{hasPendingDeal ? " ❖" : ""}</div>}
+                {hasPendingDeal && !isNearby && (
+                  <div className="deal-indicator">❖</div>
+                )}
               </button>
             );
           })}
@@ -469,11 +527,12 @@ export default function HomePage() {
         <div className="talk-prompt">
           <kbd>E</kbd>
           <span>TALK TO <strong>{nearbyNPC.toUpperCase()}</strong></span>
+          {pendingDeals.some(d => d.npcName === nearbyNPC) && <span className="deal-badge">❖ DEAL PENDING</span>}
           <span className="blink-star">★</span>
         </div>
       )}
 
-      {/* ── Notebook sidebar ── */}
+      {/* ── Notebook ── */}
       {notebookOpen && (
         <aside className="notebook" onClick={e => e.stopPropagation()}>
           <div className="nb-head">
@@ -481,33 +540,65 @@ export default function HomePage() {
             <button className="icon-btn" onClick={() => setNotebookOpen(false)}>✕</button>
           </div>
           <div className="nb-body">
-            {/* Global clues — always visible, point at the killer */}
+
+            {/* ── Active Deals ── */}
             <div className="nb-section">
-              <h4>▸ KNOWN FROM THE SCENE</h4>
-              {worldState.globalClues.map((c, i) => (
-                <p key={i} className="nb-entry" style={{ color: "#f0c070" }}>◆ {c}</p>
+              <h4>▸ ACTIVE DEALS</h4>
+              {pendingDeals.length === 0 ? (
+                <p className="nb-empty">— no active deals —</p>
+              ) : pendingDeals.map((deal, i) => (
+                <div key={i} className="nb-deal nb-deal-active">
+                  <div className="nb-deal-source">❖ {deal.npcName.toUpperCase()}</div>
+                  <div className="nb-deal-task">{deal.task}</div>
+                  {deal.taskTarget && (
+                    <div className="nb-deal-target">
+                      ↳ GO SPEAK TO <span className="nb-deal-target-name">{deal.taskTarget.toUpperCase()}</span>
+                    </div>
+                  )}
+                  <div className="nb-deal-reward">
+                    <span className="nb-deal-reward-label">THEY WILL REVEAL</span>
+                    <span className="nb-deal-reward-text">"{deal.reward}"</span>
+                  </div>
+                </div>
               ))}
             </div>
+
             <div className="nb-hr" />
+
+            {/* ── Confirmed Truths ── */}
             <div className="nb-section">
-              <h4>▸ CLUES DISCOVERED</h4>
-              {worldState.cluesDiscovered.length === 0
-                ? <p className="nb-empty">— nothing yet — talk to people —</p>
-                : worldState.cluesDiscovered.map((c, i) => <p key={i} className="nb-entry">◆ {c}</p>)}
+              <h4>▸ CONFIRMED TRUTHS</h4>
+              {confirmedTruths.length === 0 ? (
+                <p className="nb-empty">— complete a deal to confirm a truth —</p>
+              ) : confirmedTruths.map((ct, i) => (
+                <div key={i} className="nb-truth">
+                  <div className="nb-truth-source">★ {ct.source.toUpperCase()} — TRN {ct.turn}</div>
+                  <div className="nb-truth-text">"{ct.truth}"</div>
+                </div>
+              ))}
             </div>
+
             <div className="nb-hr" />
-            <div className="nb-section">
-              <h4>▸ CONTRADICTIONS</h4>
-              {worldState.contradictionsFound.length === 0
-                ? <p className="nb-empty">— none recorded —</p>
-                : worldState.contradictionsFound.map((c, i) => <p key={i} className="nb-entry">◆ {c}</p>)}
-            </div>
-            <div className="nb-hr" />
-            <div className="nb-section">
-              <h4>▸ LOG</h4>
-              {worldState.investigationLog.slice(-6).map((e, i) => <p key={i} className="nb-entry log">· {e}</p>)}
-            </div>
-            <div className="nb-hr" />
+
+            {/* ── Completed Deals ── */}
+            {completedDeals.length > 0 && (
+              <>
+                <div className="nb-section">
+                  <h4>▸ COMPLETED DEALS</h4>
+                  {completedDeals.map((deal, i) => (
+                    <div key={i} className="nb-deal nb-deal-done">
+                      <div className="nb-deal-source">✓ {deal.npcName.toUpperCase()}</div>
+                      {deal.revealedTruth && (
+                        <div className="nb-deal-task" style={{ color: "#c084fc" }}>{deal.revealedTruth}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="nb-hr" />
+              </>
+            )}
+
+            {/* ── Techniques ── */}
             <div className="nb-section">
               <h4>▸ TECHNIQUES</h4>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
@@ -518,16 +609,14 @@ export default function HomePage() {
                 ].map((t) => (
                   <span key={t} style={{
                     fontFamily: "'Press Start 2P', monospace",
-                    fontSize: "6px",
-                    padding: "4px 6px",
-                    border: "1px solid #3a1050",
-                    background: "#180a22",
-                    color: "#c084fc",
-                    letterSpacing: "0.04em",
+                    fontSize: "6px", padding: "4px 6px",
+                    border: "1px solid #3a1050", background: "#180a22",
+                    color: "#c084fc", letterSpacing: "0.04em",
                   }}>{t}</span>
                 ))}
               </div>
             </div>
+
           </div>
         </aside>
       )}
@@ -535,7 +624,6 @@ export default function HomePage() {
       {/* ── Dialog box ── */}
       {selectedNPC && activeNPC && (
         <div className="dlg-wrap">
-          {/* NPC info bar */}
           <div className="dlg-bar">
             <div className="dlg-portrait">
               <img src={npcSpriteMap[selectedNPC]} alt={selectedNPC} className="portrait-img" draggable={false} />
@@ -553,7 +641,24 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Messages */}
+          {/* ── Active deal reminder inside dialog ── */}
+          {activeDealForCurrentNPC && (
+            <div className="dlg-deal-reminder">
+              <div className="dlg-deal-reminder-label">❖ ACTIVE DEAL</div>
+              <div className="dlg-deal-reminder-task">{activeDealForCurrentNPC.task}</div>
+              {activeDealForCurrentNPC.taskTarget && (
+                <div className="dlg-deal-reminder-target">
+                  ↳ Visit <strong>{activeDealForCurrentNPC.taskTarget}</strong> first, then return here and report back
+                </div>
+              )}
+              {!activeDealForCurrentNPC.taskTarget && (
+                <div className="dlg-deal-reminder-target">
+                  ↳ Share what you've found — tell them directly in conversation
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="dlg-messages" ref={chatLogRef}>
             {messages[selectedNPC].length === 0 && (
               <p className="dlg-empty">
@@ -564,34 +669,21 @@ export default function HomePage() {
             )}
             {messages[selectedNPC].map((m, i) => (
               <div key={i} style={{
-                display: "flex",
-                width: "100%",
+                display: "flex", width: "100%",
                 justifyContent: m.speaker === "user" ? "flex-end" : "flex-start",
                 flexShrink: 0,
               }}>
-                <div style={{
-                  maxWidth: "62%",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "2px",
-                }}>
+                <div style={{ maxWidth: "62%", display: "flex", flexDirection: "column", gap: "2px" }}>
                   <div style={{
-                    fontFamily: "'Press Start 2P', monospace",
-                    fontSize: "6px",
-                    letterSpacing: ".04em",
-                    padding: "0 2px",
-                    color: m.speaker === "user" ? "#4338ca" : "#6b21a8",
+                    fontFamily: "'Press Start 2P', monospace", fontSize: "6px", letterSpacing: ".04em",
+                    padding: "0 2px", color: m.speaker === "user" ? "#4338ca" : "#6b21a8",
                     textAlign: m.speaker === "user" ? "right" : "left",
                   }}>
                     {m.speaker === "user" ? "YOU" : selectedNPC.toUpperCase()}
                   </div>
                   <div style={{
-                    fontFamily: "'VT323', monospace",
-                    fontSize: "19px",
-                    lineHeight: "1.4",
-                    padding: "6px 10px",
-                    wordBreak: "break-word",
-                    overflowWrap: "anywhere",
+                    fontFamily: "'VT323', monospace", fontSize: "19px", lineHeight: "1.4",
+                    padding: "6px 10px", wordBreak: "break-word", overflowWrap: "anywhere",
                     whiteSpace: "pre-wrap",
                     background: m.speaker === "user" ? "#0c0a30" : "#1c0535",
                     border: m.speaker === "user" ? "1px solid #312e81" : "1px solid #4a1060",
@@ -607,7 +699,6 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* Input */}
           <div className="dlg-input-row">
             <input
               ref={inputRef}
@@ -615,7 +706,13 @@ export default function HomePage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder={selectedNPC === "Ruby" ? "Ask Ruby for insight..." : "Ask a question..."}
+              placeholder={
+                activeDealForCurrentNPC
+                  ? activeDealForCurrentNPC.taskTarget
+                    ? `Report back what ${activeDealForCurrentNPC.taskTarget} said...`
+                    : "Share what you've found..."
+                  : selectedNPC === "Ruby" ? "Ask Ruby for insight..." : "Ask a question..."
+              }
               disabled={loading || worldState.gameOver || typingNPC === selectedNPC}
             />
             <button className="btn primary" onClick={sendMessage} disabled={loading || worldState.gameOver || typingNPC === selectedNPC}>
@@ -635,7 +732,76 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── Elicitation feedback toast ── */}
+      {/* ── Deal Offer Popup ── */}
+      {barterOffer && selectedNPC === barterOffer.npcName && (
+        <div style={{
+          position: "fixed", bottom: "320px", left: "50%", transform: "translateX(-50%)",
+          zIndex: 300, background: "#0e0418", border: "2px solid #f472b6",
+          padding: "20px 24px", maxWidth: "560px", width: "90%",
+          fontFamily: "'VT323', monospace",
+          boxShadow: "0 0 60px #f472b622",
+        }}>
+          <div style={{ fontFamily: "'Press Start 2P',monospace", fontSize: "7px", color: "#f472b6", marginBottom: "14px", letterSpacing: "0.1em" }}>
+            ❖ {barterOffer.npcName.toUpperCase()} PROPOSES A DEAL
+          </div>
+
+          {/* What they'll tell you */}
+          <div style={{ marginBottom: "12px" }}>
+            <div style={{ fontFamily: "'Press Start 2P',monospace", fontSize: "6px", color: "#6b3080", marginBottom: "5px", letterSpacing: "0.06em" }}>IF YOU DO THIS — THEY WILL TELL YOU</div>
+            <div style={{ fontSize: "19px", color: "#f0e8ff", lineHeight: "1.4", paddingLeft: "8px", borderLeft: "2px solid #f472b633" }}>"{barterOffer.offer}"</div>
+          </div>
+
+          <div style={{ height: "1px", background: "#3a1050", margin: "12px 0" }} />
+
+          {/* The task */}
+          <div style={{ marginBottom: "10px" }}>
+            <div style={{ fontFamily: "'Press Start 2P',monospace", fontSize: "6px", color: "#6b3080", marginBottom: "5px", letterSpacing: "0.06em" }}>YOUR TASK</div>
+            <div style={{ fontSize: "18px", color: "#c084fc", lineHeight: "1.5" }}>{barterOffer.asking}</div>
+          </div>
+
+          {/* Target NPC indicator */}
+          {barterOffer.taskTarget && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              padding: "8px 10px", background: "#110322", border: "1px solid #3a1050",
+              marginBottom: "14px",
+            }}>
+              <div style={{ fontFamily: "'Press Start 2P',monospace", fontSize: "6px", color: "#f472b6" }}>↳ VISIT</div>
+              <div style={{
+                fontFamily: "'Press Start 2P',monospace", fontSize: "7px", color: "#e879f9",
+                padding: "2px 8px", border: "1px solid #f472b644", background: "#1c0535",
+              }}>
+                {barterOffer.taskTarget.toUpperCase()}
+              </div>
+              <div style={{ fontFamily: "'Press Start 2P',monospace", fontSize: "6px", color: "#6b3080" }}>THEN RETURN HERE</div>
+            </div>
+          )}
+          {!barterOffer.taskTarget && (
+            <div style={{
+              padding: "8px 10px", background: "#110322", border: "1px solid #3a1050",
+              marginBottom: "14px",
+              fontFamily: "'Press Start 2P',monospace", fontSize: "6px", color: "#6b3080",
+            }}>
+              ↳ TELL THEM WHAT YOU'VE FOUND — IN THIS CONVERSATION
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              onClick={() => setBarterOffer(null)}
+              style={{ fontFamily: "'Press Start 2P',monospace", fontSize: "7px", padding: "8px 14px", background: "#1a0535", border: "1px solid #f472b6", color: "#f472b6", cursor: "pointer" }}>
+              ACCEPT DEAL
+            </button>
+            <button
+              onClick={() => setBarterOffer(null)}
+              style={{ fontFamily: "'Press Start 2P',monospace", fontSize: "7px", padding: "8px 14px", background: "#1a0535", border: "1px solid #3a1050", color: "#6b3080", cursor: "pointer" }}>
+              DECLINE
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Elicitation toast ── */}
       {elicitationToast && (
         <div style={{
           position: "fixed", top: "52px", left: "50%", transform: "translateX(-50%)",
@@ -652,87 +818,66 @@ export default function HomePage() {
       {/* ── Ending ── */}
       {worldState.gameOver && (
         <div style={{
-          position:"fixed", inset:0, zIndex:500,
-          background:"rgba(5,0,12,0.92)",
-          display:"flex", alignItems:"center", justifyContent:"center",
-          flexDirection:"column",
-          fontFamily:"'Press Start 2P', monospace",
+          position: "fixed", inset: 0, zIndex: 500,
+          background: "rgba(5,0,12,0.92)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexDirection: "column",
+          fontFamily: "'Press Start 2P', monospace",
         }}>
-          {/* CRT on end screen too */}
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.15) 3px,rgba(0,0,0,0.15) 4px)" }} />
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at center,transparent 40%,rgba(8,2,16,0.85) 100%)" }} />
           <div style={{
-            position:"absolute", inset:0, pointerEvents:"none",
-            background:"repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.15) 3px,rgba(0,0,0,0.15) 4px)",
-          }} />
-          <div style={{
-            position:"absolute", inset:0, pointerEvents:"none",
-            background:"radial-gradient(ellipse at center,transparent 40%,rgba(8,2,16,0.85) 100%)",
-          }} />
-
-          <div style={{
-            position:"relative", zIndex:10,
-            display:"flex", flexDirection:"column", alignItems:"center", gap:"28px",
-            padding:"40px 48px",
+            position: "relative", zIndex: 10,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: "28px",
+            padding: "40px 48px",
             border: worldState.winner ? "2px solid #f472b666" : "2px solid #ff4a6a66",
             background: worldState.winner ? "rgba(20,5,35,0.98)" : "rgba(20,5,10,0.98)",
-            boxShadow: worldState.winner
-              ? "0 0 60px #f472b622, inset 0 0 40px rgba(244,114,182,0.05)"
-              : "0 0 60px #ff4a6a22, inset 0 0 40px rgba(255,74,106,0.05)",
-            maxWidth:"600px", width:"90%",
+            boxShadow: worldState.winner ? "0 0 60px #f472b622" : "0 0 60px #ff4a6a22",
+            maxWidth: "600px", width: "90%",
           }}>
-            {/* Big icon */}
             <div style={{
-              fontSize:"56px",
-              animation:"spin 4s linear infinite",
+              fontSize: "56px",
+              animation: "spin 4s linear infinite",
               color: worldState.winner ? "#f472b6" : "#ff4a6a",
-              textShadow: worldState.winner ? "0 0 30px #f472b6, 0 0 60px #f472b644" : "0 0 30px #ff4a6a, 0 0 60px #ff4a6a44",
+              textShadow: worldState.winner ? "0 0 30px #f472b6" : "0 0 30px #ff4a6a",
             }}>
               {worldState.winner ? "★" : "✕"}
             </div>
-
-            {/* Main verdict */}
-            <div style={{textAlign:"center", display:"flex", flexDirection:"column", gap:"8px"}}>
-              <div style={{
-                fontSize:"11px",
-                color: worldState.winner ? "#f472b6" : "#ff4a6a",
-                letterSpacing:"0.2em",
-                textShadow: worldState.winner ? "0 0 20px #f472b6aa" : "0 0 20px #ff4a6aaa",
-              }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "11px", color: worldState.winner ? "#f472b6" : "#ff4a6a", letterSpacing: "0.2em" }}>
                 {worldState.winner ? "MURDERER KILLED" : "MURDERER STILL ALIVE"}
               </div>
-              <div style={{fontSize:"7px", color: worldState.winner ? "#c084fc" : "#ff8a6a", letterSpacing:"0.12em"}}>
+              <div style={{ fontSize: "7px", color: worldState.winner ? "#c084fc" : "#ff8a6a", letterSpacing: "0.12em", marginTop: "6px" }}>
                 {worldState.winner ? "THE TRUTH HAS BEEN AVENGED" : "YOU KILLED THE WRONG PERSON"}
               </div>
             </div>
-
-            {/* Divider */}
-            <div style={{width:"100%", height:"1px", background: worldState.winner ? "#f472b622" : "#ff4a6a22"}} />
-
-            {/* Details */}
-            <div style={{display:"flex", flexDirection:"column", gap:"12px", width:"100%"}}>
-              <div style={{display:"flex", gap:"10px", alignItems:"flex-start"}}>
-                <span style={{fontSize:"7px", color:"#6b3080", minWidth:"80px", letterSpacing:"0.1em"}}>KILLER</span>
-                <span style={{fontSize:"14px", fontFamily:"'VT323',monospace", color:"#f0e8ff", letterSpacing:"0.05em"}}>
-                  {worldState.killer.toUpperCase()}
-                </span>
-              </div>
-              <div style={{display:"flex", gap:"10px", alignItems:"flex-start"}}>
-                <span style={{fontSize:"7px", color:"#6b3080", minWidth:"80px", letterSpacing:"0.1em"}}>MOTIVE</span>
-                <span style={{fontSize:"14px", fontFamily:"'VT323',monospace", color:"#c084fc", lineHeight:"1.4"}}>
-                  {worldState.motive}
-                </span>
-              </div>
-              <div style={{display:"flex", gap:"10px", alignItems:"flex-start"}}>
-                <span style={{fontSize:"7px", color:"#6b3080", minWidth:"80px", letterSpacing:"0.1em"}}>METHOD</span>
-                <span style={{fontSize:"14px", fontFamily:"'VT323',monospace", color:"#c084fc", lineHeight:"1.4"}}>
-                  {worldState.method}
-                </span>
-              </div>
+            <div style={{ width: "100%", height: "1px", background: worldState.winner ? "#f472b622" : "#ff4a6a22" }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+              {[
+                { label: "KILLER", value: worldState.killer.toUpperCase(), color: "#f0e8ff" },
+                { label: "MOTIVE", value: worldState.motive, color: "#c084fc" },
+                { label: "METHOD", value: worldState.method, color: "#c084fc" },
+              ].map(row => (
+                <div key={row.label} style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                  <span style={{ fontSize: "7px", color: "#6b3080", minWidth: "80px", letterSpacing: "0.1em" }}>{row.label}</span>
+                  <span style={{ fontSize: "14px", fontFamily: "'VT323',monospace", color: row.color, lineHeight: "1.4" }}>{row.value}</span>
+                </div>
+              ))}
             </div>
-
-            {/* Divider */}
-            <div style={{width:"100%", height:"1px", background: worldState.winner ? "#f472b622" : "#ff4a6a22"}} />
-
-            {/* Play again */}
+            {confirmedTruths.length > 0 && (
+              <>
+                <div style={{ width: "100%", height: "1px", background: worldState.winner ? "#f472b622" : "#ff4a6a22" }} />
+                <div style={{ width: "100%" }}>
+                  <div style={{ fontFamily: "'Press Start 2P',monospace", fontSize: "7px", color: "#6b3080", marginBottom: "8px" }}>TRUTHS CONFIRMED</div>
+                  {confirmedTruths.map((ct, i) => (
+                    <div key={i} style={{ fontFamily: "'VT323',monospace", fontSize: "14px", color: "#f472b6", lineHeight: "1.4", marginBottom: "4px" }}>
+                      ★ {ct.source}: {ct.truth}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <div style={{ width: "100%", height: "1px", background: worldState.winner ? "#f472b622" : "#ff4a6a22" }} />
             <button
               onClick={async () => {
                 const newGame = await (await fetch("/api/game")).json();
@@ -744,19 +889,11 @@ export default function HomePage() {
                 setFacing("right");
               }}
               style={{
-                fontFamily:"'Press Start 2P',monospace", fontSize:"8px",
-                padding:"12px 24px",
-                background:"transparent",
+                fontFamily: "'Press Start 2P',monospace", fontSize: "8px",
+                padding: "12px 24px", background: "transparent",
                 border: worldState.winner ? "1px solid #f472b6" : "1px solid #ff4a6a",
                 color: worldState.winner ? "#f472b6" : "#ff4a6a",
-                cursor:"pointer", letterSpacing:"0.1em",
-                transition:"all 0.2s",
-              }}
-              onMouseEnter={e => {
-                (e.target as HTMLButtonElement).style.background = worldState.winner ? "#f472b622" : "#ff4a6a22";
-              }}
-              onMouseLeave={e => {
-                (e.target as HTMLButtonElement).style.background = "transparent";
+                cursor: "pointer", letterSpacing: "0.1em",
               }}
             >
               ▶ INVESTIGATE AGAIN
@@ -772,330 +909,131 @@ export default function HomePage() {
       `}</style>
 
       <style jsx>{`
-        .shell {
-          width: 100vw; height: 100vh;
-          display: flex; flex-direction: column;
-          background: #100818; color: #fce7f3;
-          font-family: 'VT323', monospace; font-size: 17px;
-          overflow: hidden; position: relative;
-        }
-
-        /* CRT */
-        .scanlines {
-          position: fixed; inset: 0; z-index: 900; pointer-events: none;
-          background: repeating-linear-gradient(to bottom, transparent 0, transparent 3px, rgba(0,0,0,0.13) 3px, rgba(0,0,0,0.13) 4px);
-        }
-        .vignette {
-          position: fixed; inset: 0; z-index: 901; pointer-events: none;
-          background: radial-gradient(ellipse at center, transparent 50%, rgba(8,2,16,0.72) 100%);
-        }
+        .shell { width:100vw; height:100vh; display:flex; flex-direction:column; background:#100818; color:#fce7f3; font-family:'VT323',monospace; font-size:17px; overflow:hidden; position:relative; }
+        .scanlines { position:fixed; inset:0; z-index:900; pointer-events:none; background:repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.13) 3px,rgba(0,0,0,0.13) 4px); }
+        .vignette { position:fixed; inset:0; z-index:901; pointer-events:none; background:radial-gradient(ellipse at center,transparent 50%,rgba(8,2,16,0.72) 100%); }
 
         /* HUD */
-        .hud {
-          flex: 0 0 38px; height: 38px;
-          display: flex; justify-content: space-between; align-items: center;
-          padding: 0 14px; background: #0d0514;
-          border-bottom: 2px solid #4a1060;
-          gap: 10px; overflow: hidden; z-index: 10;
-        }
-        .hud-left, .hud-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-        .hud-logo {
-          font-family: 'Press Start 2P', monospace; font-size: 9px;
-          color: #f472b6; letter-spacing: 0.2em;
-          text-shadow: 0 0 12px #f472b677; flex-shrink: 0;
-        }
-        .hud-logo span { color: #e879f9; }
-        .hud-sep { width: 1px; height: 18px; background: #3a1050; flex-shrink: 0; }
-        .chip {
-          font-family: 'Press Start 2P', monospace; font-size: 7px;
-          padding: 3px 7px; border: 1px solid #3a1050;
-          background: #180a22; color: #c084fc;
-          letter-spacing: 0.05em; white-space: nowrap;
-        }
-        .chip em { color: #f472b6; font-style: normal; margin-left: 3px; }
-        .chip-icon { margin-right: 3px; }
-        .chip.dim { color: #6b3080; border-color: #250838; }
-        .chip.hot { color: #ff4a6a; border-color: #ff4a6a33; }
-        .chip.win { color: #4ade80; border-color: #4ade8033; }
-        .chip.lose { color: #f87171; border-color: #f8717133; }
-        .key-hint { display: flex; align-items: center; gap: 4px; }
-        .hud-right span { font-size: 13px; color: #5a2870; }
-        kbd {
-          font-family: 'Press Start 2P', monospace; font-size: 6px;
-          padding: 2px 5px; border: 1px solid #3a1050;
-          background: #180a22; color: #e879f9;
-        }
+        .hud { flex:0 0 38px; height:38px; display:flex; justify-content:space-between; align-items:center; padding:0 14px; background:#0d0514; border-bottom:2px solid #4a1060; gap:10px; overflow:hidden; z-index:10; }
+        .hud-left,.hud-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+        .hud-logo { font-family:'Press Start 2P',monospace; font-size:9px; color:#f472b6; letter-spacing:0.2em; text-shadow:0 0 12px #f472b677; }
+        .hud-logo span { color:#e879f9; }
+        .hud-sep { width:1px; height:18px; background:#3a1050; }
+        .chip { font-family:'Press Start 2P',monospace; font-size:7px; padding:3px 7px; border:1px solid #3a1050; background:#180a22; color:#c084fc; letter-spacing:0.05em; white-space:nowrap; }
+        .chip em { color:#f472b6; font-style:normal; margin-left:3px; }
+        .chip-icon { margin-right:3px; }
+        .chip.dim { color:#6b3080; border-color:#250838; }
+        .chip.hot { color:#ff4a6a; border-color:#ff4a6a33; }
+        .chip.win { color:#4ade80; border-color:#4ade8033; }
+        .chip.lose { color:#f87171; border-color:#f8717133; }
+        .chip.deal-chip { color:#f472b6; border-color:#f472b644; background:#1c0535; animation:pulse-deal 2s ease-in-out infinite; }
+        @keyframes pulse-deal { 0%,100%{border-color:#f472b644}50%{border-color:#f472b6aa} }
+        .key-hint { display:flex; align-items:center; gap:4px; }
+        .hud-right span { font-size:13px; color:#5a2870; }
+        kbd { font-family:'Press Start 2P',monospace; font-size:6px; padding:2px 5px; border:1px solid #3a1050; background:#180a22; color:#e879f9; }
 
-        /* SCENE */
-        .scene-wrap {
-          flex: 1 1 0;
-          min-height: 0;
-          overflow: hidden;
-          display: flex;
-          position: relative;
-          z-index: 1;
-        }
-        .scene {
-          position: relative;
-          width: 100%; height: 100%;
-          overflow: hidden;
-          image-rendering: pixelated;
-          background: #0d0514;
-        }
-        .stage-bg {
-          position: absolute; inset: 0;
-          width: 100%; height: 100%;
-          object-fit: fill;
-          image-rendering: pixelated;
-          pointer-events: none;
-        }
+        /* Scene */
+        .scene-wrap { flex:1 1 0; min-height:0; overflow:hidden; display:flex; position:relative; z-index:1; }
+        .scene { position:relative; width:100%; height:100%; overflow:hidden; image-rendering:pixelated; background:#0d0514; }
+        .stage-bg { position:absolute; inset:0; width:100%; height:100%; object-fit:fill; image-rendering:pixelated; pointer-events:none; }
+        .star-overlay { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+        .sp { position:absolute; color:#f472b6; opacity:0.14; font-size:11px; animation:float-star 8s ease-in-out infinite; }
+        .sp0{left:8%;top:15%;} .sp1{left:88%;top:22%;animation-delay:1.5s;font-size:8px;color:#e879f9;} .sp2{left:18%;top:62%;animation-delay:3s;font-size:10px;} .sp3{left:76%;top:58%;animation-delay:4.5s;color:#c084fc;} .sp4{left:50%;top:8%;animation-delay:2s;font-size:9px;color:#e879f9;}
+        @keyframes float-star{0%,100%{transform:translateY(0) rotate(0deg);opacity:.14}50%{transform:translateY(-14px) rotate(22deg);opacity:.32}}
 
-        /* stars */
-        .star-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-        .sp { position: absolute; color: #f472b6; opacity: 0.14; font-size: 11px; animation: float-star 8s ease-in-out infinite; }
-        .sp0 { left: 8%; top: 15%; }
-        .sp1 { left: 88%; top: 22%; animation-delay: 1.5s; font-size: 8px; color: #e879f9; }
-        .sp2 { left: 18%; top: 62%; animation-delay: 3s; font-size: 10px; }
-        .sp3 { left: 76%; top: 58%; animation-delay: 4.5s; color: #c084fc; }
-        .sp4 { left: 50%; top: 8%; animation-delay: 2s; font-size: 9px; color: #e879f9; }
-        @keyframes float-star { 0%,100%{transform:translateY(0) rotate(0deg);opacity:.14} 50%{transform:translateY(-14px) rotate(22deg);opacity:.32} }
+        /* Sprites */
+        .player,.npc { position:absolute; width:${PLAYER_SIZE}px; height:${PLAYER_SIZE + 48}px; transform:translate(-50%,-100%); background:transparent; border:none; padding:0; }
+        .npc { cursor:pointer; }
+        .sprite { position:absolute; left:50%; bottom:0; transform:translateX(-50%); width:96px; height:96px; object-fit:contain; image-rendering:pixelated; pointer-events:none; }
+        .sprite.lg { width:106px; height:140px; }
+        .npc.nearby .sprite { filter:drop-shadow(0 0 8px #f472b6bb) drop-shadow(0 0 3px #ffffff66); }
+        .name-tag { position:absolute; bottom:calc(100% + 2px); left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:6px; color:#f472b6; background:rgba(16,8,24,0.93); padding:3px 7px; border:1px solid #f472b633; white-space:nowrap; pointer-events:none; }
+        .deal-indicator { position:absolute; top:-8px; right:-4px; font-size:10px; color:#f472b6; animation:pulse-deal-indicator 1.5s ease-in-out infinite; pointer-events:none; }
+        @keyframes pulse-deal-indicator{0%,100%{opacity:0.6;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}
 
-        /* SPRITES */
-        .player, .npc {
-          position: absolute;
-          width: ${PLAYER_SIZE}px; height: ${PLAYER_SIZE + 48}px;
-          transform: translate(-50%, -100%);
-          background: transparent; border: none; padding: 0;
-        }
-        .npc { cursor: pointer; }
-        .sprite {
-          position: absolute; left: 50%; bottom: 0;
-          transform: translateX(-50%);
-          width: 64px; height: 64px;
-          object-fit: contain; image-rendering: pixelated; pointer-events: none;
-        }
-        .sprite.lg { width: 74px; height: 90px; }
-        .npc.nearby .sprite { filter: drop-shadow(0 0 8px #f472b6bb) drop-shadow(0 0 3px #ffffff66); }
-        .name-tag {
-          position: absolute; bottom: calc(100% + 2px); left: 50%;
-          transform: translateX(-50%);
-          font-family: 'Press Start 2P', monospace; font-size: 6px;
-          color: #f472b6; background: rgba(16,8,24,0.93);
-          padding: 3px 7px; border: 1px solid #f472b633;
-          white-space: nowrap; pointer-events: none;
+        /* Talk prompt */
+        .talk-prompt { position:fixed; bottom:12px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; font-family:'Press Start 2P',monospace; font-size:8px; color:#f472b6; background:rgba(14,4,24,0.96); border:1px solid #f472b633; padding:7px 14px; z-index:50; letter-spacing:0.1em; box-shadow:0 0 18px #f472b611; }
+        .deal-badge { color:#f472b6; border:1px solid #f472b644; padding:2px 6px; font-size:6px; background:#1c0535; animation:blink .9s step-end infinite; }
+        .blink-star { animation:blink .9s step-end infinite; }
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 
-        }
+        /* Notebook */
+        .notebook { position:fixed; top:38px; right:0; bottom:0; width:300px; background:rgba(12,4,20,0.98); border-left:2px solid #4a1060; z-index:60; display:flex; flex-direction:column; overflow:hidden; }
+        .nb-head { display:flex; justify-content:space-between; align-items:center; padding:7px 12px; border-bottom:1px solid #2a0a38; font-family:'Press Start 2P',monospace; font-size:8px; color:#f472b6; background:#110420; flex-shrink:0; }
+        .icon-btn { background:none; border:none; cursor:pointer; font-family:'VT323',monospace; font-size:18px; color:#7e4a9a; padding:0 4px; transition:color .1s; }
+        .icon-btn:hover { color:#f472b6; }
+        .nb-body { overflow-y:auto; flex:1; padding:12px 14px; scrollbar-width:thin; scrollbar-color:#2a0a38 #0d0514; }
+        .nb-section { margin-bottom:12px; }
+        .nb-section h4 { font-family:'Press Start 2P',monospace; font-size:7px; color:#e879f9; letter-spacing:.1em; margin-bottom:8px; }
+        .nb-hr { height:1px; background:#220838; margin:10px 0; }
+        .nb-empty { font-size:14px; color:#3a1050; font-style:italic; }
 
+        /* Deal entries in notebook */
+        .nb-deal { margin-bottom:10px; padding:8px 10px; border:1px solid; }
+        .nb-deal-active { border-color:#f472b644; background:#0e0420; }
+        .nb-deal-done { border-color:#2a0a38; background:#0a010e; }
+        .nb-deal-source { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:0.08em; margin-bottom:5px; }
+        .nb-deal-active .nb-deal-source { color:#f472b6; }
+        .nb-deal-done .nb-deal-source { color:#3a1050; }
+        .nb-deal-task { font-family:'VT323',monospace; font-size:15px; color:#c084fc; line-height:1.4; margin-bottom:5px; }
+        .nb-deal-target { font-family:'Press Start 2P',monospace; font-size:6px; color:#6b3080; letter-spacing:0.04em; margin-bottom:6px; }
+        .nb-deal-target-name { color:#e879f9; }
+        .nb-deal-reward { display:flex; flex-direction:column; gap:2px; padding-top:5px; border-top:1px solid #2a0a38; }
+        .nb-deal-reward-label { font-family:'Press Start 2P',monospace; font-size:5px; color:#4a1060; letter-spacing:0.06em; }
+        .nb-deal-reward-text { font-family:'VT323',monospace; font-size:14px; color:#7c3aed; line-height:1.3; font-style:italic; }
 
-        /* TALK PROMPT */
-        .talk-prompt {
-          position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
-          display: flex; align-items: center; gap: 8px;
-          font-family: 'Press Start 2P', monospace; font-size: 8px;
-          color: #f472b6; background: rgba(14,4,24,0.96);
-          border: 1px solid #f472b633; padding: 7px 14px; z-index: 50;
-          letter-spacing: 0.1em; box-shadow: 0 0 18px #f472b611;
-        }
-        .blink-star { animation: blink .9s step-end infinite; }
-        @keyframes blink { 0%,100%{opacity:1}50%{opacity:0} }
+        /* Confirmed truths */
+        .nb-truth { margin-bottom:10px; padding:8px 10px; border:1px solid #f472b633; background:#0e0420; }
+        .nb-truth-source { font-family:'Press Start 2P',monospace; font-size:6px; color:#f472b6; margin-bottom:4px; letter-spacing:0.06em; }
+        .nb-truth-text { font-family:'VT323',monospace; font-size:16px; color:#f0e8ff; line-height:1.4; }
 
-        /* NOTEBOOK */
-        .notebook {
-          position: fixed; top: 38px; right: 0; bottom: 0;
-          width: 290px; background: rgba(12,4,20,0.98);
-          border-left: 2px solid #4a1060; z-index: 60;
-          display: flex; flex-direction: column; overflow: hidden;
-        }
-        .nb-head {
-          display: flex; justify-content: space-between; align-items: center;
-          padding: 7px 12px; border-bottom: 1px solid #2a0a38;
-          font-family: 'Press Start 2P', monospace; font-size: 8px;
-          color: #f472b6; background: #110420; flex-shrink: 0;
-        }
-        .icon-btn {
-          background: none; border: none; cursor: pointer;
-          font-family: 'VT323', monospace; font-size: 18px;
-          color: #7e4a9a; padding: 0 4px; transition: color .1s;
-        }
-        .icon-btn:hover { color: #f472b6; }
-        .nb-body { overflow-y: auto; flex: 1; padding: 12px 14px; scrollbar-width: thin; scrollbar-color: #2a0a38 #0d0514; }
-        .nb-section { margin-bottom: 12px; }
-        .nb-section h4 { font-family: 'Press Start 2P', monospace; font-size: 7px; color: #e879f9; letter-spacing: .1em; margin-bottom: 7px; }
-        .nb-hr { height: 1px; background: #220838; margin: 10px 0; }
-        .nb-empty { font-size: 14px; color: #3a1050; font-style: italic; }
-        .nb-entry { font-size: 15px; color: #c084fc; line-height: 1.5; margin-bottom: 3px; }
-        .nb-entry.log { color: #7e4a9a; font-size: 14px; }
+        /* Dialog */
+        .dlg-wrap { position:fixed; bottom:0; left:0; right:0; z-index:200; display:flex; flex-direction:column; background:#0e0418; border-top:2px solid #7c3aed; box-shadow:0 -4px 32px rgba(124,58,237,0.2); }
 
-        /* ── DIALOG ── */
-        /* Outer wrapper: fixed to bottom, full width, 300px tall */
-        .dlg-wrap {
-          position: fixed;
-          bottom: 0; left: 0; right: 0;
-          height: 300px;
-          z-index: 200;
-          display: flex;
-          flex-direction: column;
-          background: #0e0418;
-          border-top: 2px solid #7c3aed;
-          box-shadow: 0 -4px 32px rgba(124,58,237,0.2);
-        }
+        /* Active deal reminder inside dialog */
+        .dlg-deal-reminder { padding:7px 14px; background:#0d0220; border-bottom:1px solid #3a1060; display:flex; flex-direction:column; gap:3px; flex-shrink:0; }
+        .dlg-deal-reminder-label { font-family:'Press Start 2P',monospace; font-size:6px; color:#f472b6; letter-spacing:0.1em; }
+        .dlg-deal-reminder-task { font-family:'VT323',monospace; font-size:15px; color:#c084fc; line-height:1.3; }
+        .dlg-deal-reminder-target { font-family:'Press Start 2P',monospace; font-size:6px; color:#6b3080; letter-spacing:0.04em; }
+        .dlg-deal-reminder-target strong { color:#e879f9; }
 
-        /* Info bar — fixed 58px */
-        .dlg-bar {
-          height: 58px;
-          min-height: 58px;
-          max-height: 58px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 0 14px;
-          background: #110322;
-          border-bottom: 1px solid #2a0a3a;
-          flex-shrink: 0;
-        }
-        .dlg-portrait {
-          width: 38px; height: 38px; flex-shrink: 0;
-          border: 1px solid #6b21a8; background: #0a0116;
-          display: flex; align-items: center; justify-content: center;
-          overflow: hidden; image-rendering: pixelated;
-        }
-        .portrait-img { width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated; }
-        .dlg-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-        .dlg-name {
-          font-family: 'Press Start 2P', monospace; font-size: 8px;
-          color: #f472b6; letter-spacing: .08em; white-space: nowrap;
-        }
-        .dlg-sub { font-size: 13px; color: #7c3aed; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .dlg-bars { display: flex; gap: 10px; align-items: center; margin-left: 8px; }
-        .bar-row { display: flex; align-items: center; gap: 4px; font-family: 'Press Start 2P', monospace; font-size: 6px; color: #6b3080; }
-        .bar-track { width: 64px; height: 4px; background: #1a0828; border: 1px solid #2a0a3a; }
-        .bar-fill { height: 100%; transition: width .4s; }
-        .bar-fill.trust { background: #f472b6; }
-        .bar-fill.susp { background: #fb923c; }
-        .bar-val { color: #f0e6ff; font-size: 7px; min-width: 18px; }
-        .dlg-bar-right { margin-left: auto; flex-shrink: 0; }
+        .dlg-bar { height:58px; min-height:58px; max-height:58px; display:flex; align-items:center; gap:10px; padding:0 14px; background:#110322; border-bottom:1px solid #2a0a3a; flex-shrink:0; }
+        .dlg-portrait { width:38px; height:38px; flex-shrink:0; border:1px solid #6b21a8; background:#0a0116; display:flex; align-items:center; justify-content:center; overflow:hidden; image-rendering:pixelated; }
+        .portrait-img { width:34px; height:34px; object-fit:contain; image-rendering:pixelated; }
+        .dlg-meta { display:flex; flex-direction:column; gap:1px; min-width:0; }
+        .dlg-name { font-family:'Press Start 2P',monospace; font-size:8px; color:#f472b6; letter-spacing:.08em; white-space:nowrap; }
+        .dlg-sub { font-size:13px; color:#7c3aed; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .dlg-bars { display:flex; gap:10px; align-items:center; margin-left:8px; }
+        .bar-row { display:flex; align-items:center; gap:4px; font-family:'Press Start 2P',monospace; font-size:6px; color:#6b3080; }
+        .bar-track { width:64px; height:4px; background:#1a0828; border:1px solid #2a0a3a; }
+        .bar-fill { height:100%; transition:width .4s; }
+        .bar-fill.trust { background:#f472b6; }
+        .bar-fill.susp { background:#fb923c; }
+        .bar-val { color:#f0e6ff; font-size:7px; min-width:18px; }
+        .dlg-bar-right { margin-left:auto; flex-shrink:0; }
 
-        /* Messages area — fills all space between bar and input */
-        .dlg-messages {
-          flex: 1;
-          min-height: 0;
-          overflow-y: auto;
-          overflow-x: hidden;
-          padding: 10px 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          background: #07010f;
-          scrollbar-width: thin;
-          scrollbar-color: #3a1060 #07010f;
-        }
-        .dlg-empty { font-size: 15px; color: #3a1060; font-style: italic; }
+        .dlg-messages { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:10px 16px; display:flex; flex-direction:column; gap:8px; background:#07010f; scrollbar-width:thin; scrollbar-color:#3a1060 #07010f; }
+        .dlg-empty { font-size:15px; color:#3a1060; font-style:italic; }
 
-        /* Message rows */
-        .msg-row {
-          display: flex;
-          width: 100%;
-        }
-        .msg-row.npc  { justify-content: flex-start; }
-        .msg-row.user { justify-content: flex-end; }
+        .dlg-input-row { height:44px; min-height:44px; max-height:44px; display:flex; align-items:center; gap:8px; padding:0 12px; border-top:1px solid #2a0a3a; background:#0e0418; flex-shrink:0; }
+        .dlg-input { flex:1; min-width:0; background:#0a0116; border:1px solid #2a0a3a; color:#f5f0ff; font-family:'VT323',monospace; font-size:20px; padding:4px 10px; outline:none; height:32px; }
+        .dlg-input:focus { border-color:#7c3aed; }
+        .dlg-input::placeholder { color:#2d0a55; }
+        .dlg-input:disabled { opacity:.4; }
 
-        .msg-box {
-          max-width: 62%;
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .msg-who {
-          font-family: 'Press Start 2P', monospace;
-          font-size: 6px; letter-spacing: .04em;
-          padding: 0 2px;
-        }
-        .msg-row.npc  .msg-who { color: #6b21a8; }
-        .msg-row.user .msg-who { color: #4338ca; text-align: right; }
+        .btn { font-family:'Press Start 2P',monospace; font-size:7px; padding:0 11px; height:32px; background:#110322; border:1px solid #3a1060; color:#a78bfa; cursor:pointer; white-space:nowrap; letter-spacing:.04em; transition:background .1s,color .1s,border-color .1s; }
+        .btn:hover:not(:disabled) { background:#1c0935; color:#f472b6; border-color:#7c3aed; }
+        .btn:disabled { opacity:.35; cursor:default; }
+        .btn.primary { color:#f0abfc; border-color:#7c3aed; }
+        .btn.kill { color:#ff4a6a; border-color:#ff4a6a44; }
+        .btn.kill:hover:not(:disabled) { background:#1e0810; border-color:#ff4a6a88; }
 
-        .msg-text {
-          font-family: 'VT323', monospace;
-          font-size: 19px; line-height: 1.4;
-          padding: 6px 10px;
-          word-break: break-word;
-          overflow-wrap: anywhere;
-          white-space: pre-wrap;
-        }
-        .msg-row.npc  .msg-text {
-          background: #1c0535;
-          border: 1px solid #4a1060;
-          color: #f0e8ff;
-          border-radius: 0 6px 6px 6px;
-        }
-        .msg-row.user .msg-text {
-          background: #0c0a30;
-          border: 1px solid #312e81;
-          color: #c7d2fe;
-          text-align: right;
-          border-radius: 6px 0 6px 6px;
-        }
-        .cursor { animation: blink .55s step-end infinite; color: #f472b6; }
+        .cursor { animation:blink .55s step-end infinite; color:#f472b6; }
 
-        /* Input row — fixed 44px */
-        .dlg-input-row {
-          height: 44px;
-          min-height: 44px;
-          max-height: 44px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 0 12px;
-          border-top: 1px solid #2a0a3a;
-          background: #0e0418;
-          flex-shrink: 0;
-        }
-        .dlg-input {
-          flex: 1; min-width: 0;
-          background: #0a0116;
-          border: 1px solid #2a0a3a;
-          color: #f5f0ff;
-          font-family: 'VT323', monospace; font-size: 20px;
-          padding: 4px 10px; outline: none; height: 32px;
-        }
-        .dlg-input:focus { border-color: #7c3aed; }
-        .dlg-input::placeholder { color: #2d0a55; }
-        .dlg-input:disabled { opacity: .4; }
-
-        .btn {
-          font-family: 'Press Start 2P', monospace; font-size: 7px;
-          padding: 0 11px; height: 32px;
-          background: #110322;
-          border: 1px solid #3a1060; color: #a78bfa;
-          cursor: pointer; white-space: nowrap; letter-spacing: .04em;
-          transition: background .1s, color .1s, border-color .1s;
-        }
-        .btn:hover:not(:disabled) { background: #1c0935; color: #f472b6; border-color: #7c3aed; }
-        .btn:disabled { opacity: .35; cursor: default; }
-        .btn.primary { color: #f0abfc; border-color: #7c3aed; }
-        .btn.kill { color: #ff4a6a; border-color: #ff4a6a44; }
-        .btn.kill:hover:not(:disabled) { background: #1e0810; border-color: #ff4a6a88; }
-
-        /* ENDING */
-        .ending {
-          position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
-          display: flex; flex-direction: column; align-items: center; gap: 10px;
-          padding: 28px 36px; border: 2px solid;
-          font-family: 'Press Start 2P', monospace; text-align: center;
-          z-index: 200; max-width: 480px;
-          animation: fadeIn .4s ease;
-        }
-        @keyframes fadeIn { from{opacity:0;transform:translate(-50%,-54%)} to{opacity:1;transform:translate(-50%,-50%)} }
-        .ending.win { background: #060f0a; border-color: #4ade8055; color: #4ade80; box-shadow: 0 0 40px #4ade8011; }
-        .ending.lose { background: #0f0608; border-color: #f8717155; color: #f87171; box-shadow: 0 0 40px #f8717111; }
-        .ending-star { font-size: 32px; animation: spin 3s linear infinite; }
-        .ending-title { font-size: 10px; letter-spacing: .12em; }
-        .ending-body { font-size: 8px; line-height: 1.8; opacity: .85; }
-        .ending-sub { font-size: 7px; opacity: .55; margin-top: 4px; }
-        @keyframes spin { to{transform:rotate(360deg)} }
-
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: #0d0514; }
-        ::-webkit-scrollbar-thumb { background: #2a0a38; }
+        @keyframes spin{to{transform:rotate(360deg)}}
+        ::-webkit-scrollbar{width:5px;}
+        ::-webkit-scrollbar-track{background:#0d0514;}
+        ::-webkit-scrollbar-thumb{background:#2a0a38;}
       `}</style>
     </main>
   );

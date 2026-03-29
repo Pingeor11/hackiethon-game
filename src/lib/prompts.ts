@@ -1,4 +1,14 @@
-import { NPCName, NPCState, WorldState } from "./types";
+import {
+  AquaMood,
+  ElicitationEntry,
+  ExtractionResult,
+  GossipEntry,
+  Mood,
+  NPCName,
+  SuspectName,
+  WorldState,
+} from "./types";
+import { NPCState } from "./types";
 
 export const ELICITATION_TECHNIQUES = {
   flattery: "Complimenting expertise to make them prove you right by sharing more.",
@@ -148,7 +158,7 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
 
   const trustIsHigh = npc.trustPlayer > 0.65;
   const trustIsLow = npc.trustPlayer < 0.35;
-  const suspicionIsHigh = npc.suspicionPlayer > 0.6; // raised threshold — less easily suspicious
+  const suspicionIsHigh = npc.suspicionPlayer > 0.6;
   const wasWarned = npc.warnedAboutAqua;
   const exposedDeals = npc.exposedDeals ?? [];
   const isFirst = npc.memories.length === 0;
@@ -160,12 +170,10 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     .map(([k, v]) => `${k}: ${v}`)
     .join("\n");
 
-  // What changed since last time — the visible shift between conversations
   const othersQuestioned = (world.questionedOrder ?? []).filter(n => n !== npc.name);
   const isReturning = recentMemories.length > 0;
   const backchannelReceived = recentRumours.filter(r => r.includes("told me:"));
 
-  // Returning conversation context — what's different this time
   const returningContext: string[] = [];
   if (isReturning) {
     if (backchannelReceived.length > 0) {
@@ -207,11 +215,6 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     `WHAT YOU WANT: ${eco.wants[0] ?? ""}`,
     `WHAT YOU FEAR: ${eco.fears[0] ?? ""}`,
     ``,
-    // Power dynamics — implicit background, shapes how they talk about others
-    // Manager is financially dependent on Executive — he deflects questions about money
-    // Director owes Executive — he avoids criticising the agency directly
-    // Executive surveils the Fan — he's unusually informed about the fan's movements
-    // CoIdol was suffocating under Manager's control — resentment colours how she discusses him
     npc.name === "Manager" ? `POWER CONTEXT: You are financially entangled with the executive in ways you don't want examined. When money or the agency's finances come up, you instinctively redirect. You protect the executive not out of loyalty but out of mutual necessity.` : ``,
     npc.name === "Director" ? `POWER CONTEXT: You owe the executive something significant and personal. You have been careful your whole career not to bite the hand that covers your debt. When the executive comes up, you are measured — not defensive, just precise.` : ``,
     npc.name === "Executive" ? `POWER CONTEXT: You have leverage over the manager and the director that they don't fully understand. You know more about the fan than you should. When these people come up, you speak about them with the quiet confidence of someone who holds the cards.` : ``,
@@ -232,7 +235,6 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     recentRumours.length ? `HEARD LATELY:\n${recentRumours.map(r => `- ${r}`).join("\n")}` : ``,
     recentMemories.length ? `WHAT YOU REMEMBER FROM PREVIOUS EXCHANGES:\n${recentMemories.map(m => `- ${m}`).join("\n")}` : ``,
     ``,
-    // Visible shift for returning conversations
     returningContext.length > 0 ? `HOW YOU'VE CHANGED SINCE LAST TIME:\n${returningContext.join("\n")}` : ``,
     ``,
     `CONVERSATION STATE: trust=${npc.trustPlayer.toFixed(2)}, suspicion=${npc.suspicionPlayer.toFixed(2)}`,
@@ -246,11 +248,53 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     `- DEFAULT TO OPEN. Most people talk freely — only deflect when directly threatened.`,
     `- BARTER: If Aqua offers you something valuable — sympathy, intel about someone else, a shared grievance — give something back. Information flows in this industry through exchange, not interrogation.`,
     `- POWER DYNAMICS: You are aware of who owes who in this industry. If Aqua seems to know something about an arrangement, you react to that knowledge — confirm, deny, or use it.`,
-    `- GOSSIP: Mention other people's arrangements naturally. "I heard the director's been doing work for the agency at a loss for years — always found that odd." This is normal conversation in this world.`,
+    `- GOSSIP: Mention other people's arrangements naturally.`,
     `- If returning: be visibly slightly different — react to what's changed since you last spoke.`,
     `- Never lecture. Imply, don't explain.`,
     ``,
     `Aqua says: "${playerMessage}"`,
+  ];
+
+  return lines.filter(l => l !== ``).join("\n").trim();
+}
+
+// ─── DEAL REVEAL PROMPT ───────────────────────────────────────────────────────
+// Used when a player returns to the deal-giver and fulfills the task.
+// The NPC delivers the promised truth dramatically — this is the payoff moment.
+
+export function buildDealRevealPrompt(
+  npc: NPCState,
+  world: WorldState,
+  playerMessage: string,
+  truthToReveal: string,
+) {
+  const aquaMood = world.aquaMood ?? "focused";
+
+  const lines: string[] = [
+    `You are ${npc.name}, ${npc.role}.`,
+    `AI HOSHINO is NOT artificial intelligence. She is a famous idol found dead at her home.`,
+    `You are speaking with Aqua — her son.`,
+    ``,
+    `WHO YOU ARE: ${npc.personality}`,
+    ``,
+    `AQUA RIGHT NOW: mood=${aquaMood}`,
+    ``,
+    `CRITICAL CONTEXT — THIS IS THE DEAL PAYOFF MOMENT:`,
+    `You previously struck a deal with Aqua. They had a task to complete before you'd share something.`,
+    `Aqua has just returned and delivered on that task. They said: "${playerMessage}"`,
+    ``,
+    `You now owe them the truth you promised. Here it is:`,
+    `"${truthToReveal}"`,
+    ``,
+    `INSTRUCTIONS:`,
+    `- Acknowledge that Aqua came through — briefly, not effusively.`,
+    `- Then deliver the truth you promised. Say it directly. This is the thing you've been holding.`,
+    `- You can be reluctant — this costs you something. But you keep your word.`,
+    `- 2-3 sentences maximum. The reveal should land hard.`,
+    `- Do NOT hedge or water down the truth. Say it plainly, in your own voice.`,
+    `- This is a moment. Let it be a moment.`,
+    ``,
+    `Your response (speak as ${npc.name}, deliver the truth):`,
   ];
 
   return lines.filter(l => l !== ``).join("\n").trim();
@@ -264,6 +308,7 @@ export function buildRubyHelperPrompt(world: WorldState) {
   const log = world.investigationLog.slice(-5).map(l => l).join(" | ") || "nothing";
   const deals = world.sideDeals?.filter(d => d.discovered).map(d => d.exposedDescription).join(" | ") || "none surfaced";
   const backchannels = world.investigationLog.filter(l => l.includes("[backchannel]")).slice(-2).join(" | ") || "none detected";
+  const confirmedTruths = (world.confirmedTruths ?? []).map((t: any) => `${t.source}: ${t.truth}`).join(" | ") || "none yet";
 
   const lines: string[] = [
     `You are Ruby. Aqua's sister. Blunt, fast, no filter, warm. You grew up in this industry.`,
@@ -272,6 +317,7 @@ export function buildRubyHelperPrompt(world: WorldState) {
     `Give 5 short bullets. Be Ruby — direct, specific, a little chaotic.`,
     ``,
     `What we know for certain: (clues: ${clues})`,
+    `Confirmed through deals: ${confirmedTruths}`,
     `What doesn't add up: (contradictions: ${contradictions})`,
     `Side deals surfaced: ${deals}`,
     `Who was warned about Aqua: ${backchannels}`,
@@ -318,7 +364,7 @@ export function buildExtractionPrompt(
     ``,
     `Rules:`,
     `- trustDelta/suspicionDelta: -0.15 to 0.15`,
-    `- discoveredClue: ONLY extract if the exchange revealed something directly relevant to the murder — a specific fact about where someone was that night, what they knew about Ai's death, a suspicious detail, or something that points toward who did it. Do NOT extract general personality reveals, emotional reactions, or vague impressions. If the NPC is the killer, look for overcorrections or knowledge they shouldn't have. Null if nothing murder-relevant surfaced.`,
+    `- discoveredClue: ONLY extract if the exchange revealed something directly relevant to the murder — a specific fact about where someone was that night, what they knew about Ai's death, a suspicious detail, or something that points toward who did it. Do NOT extract general personality reveals, emotional reactions, or vague impressions. Null if nothing murder-relevant surfaced.`,
     `- rumor: short industry gossip about this exchange. Always include.`,
     `- memorySummary: one sentence from NPC perspective.`,
     `- elicitationWorked: true if technique="${technique}" matched NPC weaknesses.`,
@@ -326,7 +372,6 @@ export function buildExtractionPrompt(
     `- aquaTone: detected="${tone}", adjust if needed.`,
     `- npcBackchannelTarget: Manager contacts Executive if finances mentioned. CoIdol contacts Director if contract mentioned. Director contacts Executive if their deal mentioned. Executive contacts Manager if case-building detected. Fan never contacts anyone. Null if harmless.`,
     `- npcBackchannelMessage: one short vague sentence if contacting someone, else null.`,
-
     ``,
     `NPC: ${npc.name} | secret: ${npc.secret ?? "none"}`,
     `truths: ${(npc.truthsKnown ?? []).join(" | ") || "none"}`,

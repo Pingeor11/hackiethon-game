@@ -1,4 +1,4 @@
-import { NPCName, NPCState, ScenarioTemplate, SuspectName, WorldState } from "./types";
+import { GossipEntry, NPCName, NPCState, PowerDynamic, ScenarioTemplate, SuspectName, WorldState } from "./types";
 
 // ─── FIXED CHARACTER IDENTITIES ───────────────────────────────────────────────
 // These never change between runs. This is who these people are.
@@ -275,6 +275,123 @@ const innocentCovers: Record<SuspectName, Array<{ secret: string; truthsKnown: s
 // Each scenario: only one killer, specific motive, specific method.
 // The same characters — but different circumstances led here.
 
+// ─── POWER DYNAMICS ──────────────────────────────────────────────────────────
+// Each scenario picks these — they surface through gossip and unlock killer implications.
+// The gossipHints drip out when either party is questioned.
+// When hintsNeeded hints have surfaced, killerImplication unlocks as a confirmed clue.
+
+function buildPowerDynamics(killer: SuspectName): PowerDynamic[] {
+  const all: PowerDynamic[] = [
+
+    // ── MANAGER over COIDOL ───────────────────────────────────────────────
+    {
+      id: "manager_controls_coidol",
+      holder: "Manager",
+      subject: "CoIdol",
+      description: "The manager controls the co-idol's bookings, image, and public narrative. She cannot move without his approval.",
+      gossipHints: [
+        "Word is the co-idol's solo projects keep getting quietly shelved — someone at the top doesn't want her stepping out.",
+        "Industry sources say the co-idol was passed over for a major casting because her management didn't submit her application.",
+        "A stylist mentioned the co-idol has been asking around about other agencies — apparently she feels trapped.",
+      ],
+      killerImplication: killer === "Manager"
+        ? "The manager's total control over B-Komachi explains why Ai's defection or exposure would destroy everything he'd built — motive to silence her permanently."
+        : killer === "CoIdol"
+        ? "The co-idol was suffocating under the manager's control — Ai's solo deal would have ended the group and freed her, but it also meant the co-idol had nothing left to lose."
+        : "The manager's control over B-Komachi created a pressure cooker — everyone inside it had reason to act.",
+      hintsNeeded: 2,
+      hintsCollected: 0,
+      exposed: false,
+    },
+
+    // ── EXECUTIVE over MANAGER ────────────────────────────────────────────
+    {
+      id: "executive_owns_manager",
+      holder: "Executive",
+      subject: "Manager",
+      description: "The manager receives undisclosed payments from the executive's holding company. He is financially dependent on the executive's goodwill.",
+      gossipHints: [
+        "Financial circles are whispering about unusual transfers from an agency holding company to individual management accounts.",
+        "The manager drives a car that costs twice his disclosed salary — someone's supplementing his income.",
+        "A former agency accountant let slip that certain managers are on informal retainers that don't appear in contracts.",
+      ],
+      killerImplication: killer === "Manager"
+        ? "The manager's financial dependency on the executive means Ai's planned legal action wasn't just a personal threat — it would have exposed the whole arrangement and ended both of them."
+        : killer === "Executive"
+        ? "The executive's financial hold over the manager explains why the manager stayed quiet and why the executive could operate without fear of exposure."
+        : "The financial arrangement between the manager and executive runs deeper than it appears.",
+      hintsNeeded: 2,
+      hintsCollected: 0,
+      exposed: false,
+    },
+
+    // ── DIRECTOR owes EXECUTIVE ───────────────────────────────────────────
+    {
+      id: "director_indebted_executive",
+      holder: "Executive",
+      subject: "Director",
+      description: "The director has been completing productions at below-market rates for years, repaying a personal debt to the executive through work.",
+      gossipHints: [
+        "Industry people find it odd that a director of Gotanda's calibre keeps working with the same agency at fees well below his market rate.",
+        "A production manager mentioned Gotanda turns down higher-paying projects to keep a standing commitment to this agency — nobody understands why.",
+        "Word is Gotanda and the executive go back further than their professional relationship suggests — something personal.",
+      ],
+      killerImplication: killer === "Director"
+        ? "Gotanda's debt to the executive meant he couldn't afford scrutiny — Ai exposing him would have unravelled the entire arrangement and destroyed both careers."
+        : killer === "Executive"
+        ? "The executive's hold over Gotanda is one of several quiet arrangements he maintains — Ai threatened to expose the whole network."
+        : "Gotanda's loyalty to the agency isn't professional — it's financial obligation.",
+      hintsNeeded: 2,
+      hintsCollected: 0,
+      exposed: false,
+    },
+
+    // ── EXECUTIVE over FAN ────────────────────────────────────────────────
+    {
+      id: "executive_surveilled_fan",
+      holder: "Executive",
+      subject: "Fan",
+      description: "The executive had the fan under surveillance through a security contractor — building a profile on him as a potential asset or scapegoat.",
+      gossipHints: [
+        "Fan community members noticed a new account joining their private groups six months ago — unusually well-informed, asking specific questions about Ai's schedule.",
+        "A security firm connected to the agency has been spotted around fan event venues — not the usual protection detail.",
+        "Someone in the fan community received money to share Ai's location data — they've gone quiet about where it came from.",
+      ],
+      killerImplication: killer === "Executive"
+        ? "The executive didn't just surveil the fan — he cultivated him as a ready-made suspect. The murder was planned around the fan's existence."
+        : killer === "Fan"
+        ? "The fan was being watched and potentially manipulated long before he acted — someone gave him access and proximity he shouldn't have had."
+        : "The fan was a piece on someone else's board long before Ai died.",
+      hintsNeeded: 2,
+      hintsCollected: 0,
+      exposed: false,
+    },
+
+    // ── COIDOL rivalry with AI ────────────────────────────────────────────
+    {
+      id: "coidol_ai_rivalry",
+      holder: "CoIdol",
+      subject: "CoIdol",  // self-directed dynamic — about her internal state
+      description: "The co-idol's entire professional identity was built in Ai's shadow. Every success Ai had cost the co-idol something.",
+      gossipHints: [
+        "People on set said the atmosphere between Ai and the co-idol had been cold for months — something changed after the last tour.",
+        "A choreographer mentioned the co-idol started requesting separate rehearsal times from Ai about six months ago.",
+        "Industry friends of the co-idol say she'd been drinking more than usual and making calls to casting directors she wasn't supposed to know.",
+      ],
+      killerImplication: killer === "CoIdol"
+        ? "The co-idol didn't just resent Ai — she had been systematically building an exit while simultaneously watching every door close. When Ai's solo deal became real, there was nothing left to protect."
+        : "The co-idol's relationship with Ai was more fractured than the public tributes suggest — she was planning her own future without Ai in it.",
+      hintsNeeded: 2,
+      hintsCollected: 0,
+      exposed: false,
+    },
+  ];
+
+  // Return all dynamics — they're all relevant regardless of killer
+  // The killerImplication is tailored per killer so whichever ones surface point correctly
+  return all;
+}
+
 // ─── SIDE DEAL POOLS ─────────────────────────────────────────────────────────
 // Each scenario picks from these. They surface when related clues are found.
 
@@ -342,6 +459,7 @@ const scenarios: ScenarioTemplate[] = [
       "The manager's phone has a deleted calendar entry for that evening.",
       "The east security camera was offline — disabled by someone who knew which one to choose.",
       "Ai had a lawyer appointment scheduled for the following Monday.",
+      "A neighbour saw the manager's car parked outside Ai's house that night.",
     ],
     npcOverrides: {
       Manager: {
@@ -368,9 +486,10 @@ const scenarios: ScenarioTemplate[] = [
       "Ruby knows Ai had been pulling away from people she trusted in the last two months.",
     ],
     globalClues: [
-      "Ai's laptop shows a remote login two days before her death.",
+      "Ai's laptop shows a remote login two days before her death — traced to the manager's personal device.",
       "The co-idol becomes uncomfortable when asked about the last real conversation she had with Ai.",
       "The director's phone places him within two blocks of the house that evening.",
+      "The manager cannot account for two hours that night and changes his story when asked twice.",
     ],
     npcOverrides: {
       Manager: {
@@ -400,6 +519,7 @@ const scenarios: ScenarioTemplate[] = [
       "Ruby found a withdrawal draft in Ai's personal files dated two weeks before her death.",
       "The co-idol reacts strangely when B-Komachi's future is mentioned.",
       "The executive had legal prepare a contingency restructure before Ai's death was public.",
+      "The manager was seen entering Ai's building that evening by the night security guard.",
     ],
     npcOverrides: {
       Manager: {
@@ -430,7 +550,8 @@ const scenarios: ScenarioTemplate[] = [
     globalClues: [
       "An unsigned copy of the solo contract was in Ai's personal files.",
       "The director will admit he 'may have mentioned' the contract to someone but refuses to say who.",
-      "The fan can describe a specific car parked near the house that night in precise detail.",
+      "The fan can describe a specific car parked near the house that night in precise detail — it matches the co-idol's.",
+      "The co-idol's phone shows she called Ai three times that evening before the calls stopped.",
     ],
     npcOverrides: {
       CoIdol: {
@@ -460,6 +581,7 @@ const scenarios: ScenarioTemplate[] = [
       "An email chain shows Ai forwarding evidence to the executive three days before her death.",
       "The executive confirms a review was in process but says it was 'paused pending circumstances'.",
       "The co-idol cannot account for ninety minutes on the night in question.",
+      "Ruby noticed the co-idol's shoes were muddy the next morning — Ai's front path is unpaved.",
     ],
     npcOverrides: {
       CoIdol: {
@@ -489,6 +611,7 @@ const scenarios: ScenarioTemplate[] = [
       "The co-idol has a copy of the published article with annotations in the margins.",
       "The manager made calls about the casting without looping in the co-idol.",
       "The director confirms both women were considered and that the decision was made above his level.",
+      "A convenience store camera two streets away caught the co-idol buying alcohol at 9pm — Ai died around 11pm.",
     ],
     npcOverrides: {
       CoIdol: {
@@ -520,6 +643,7 @@ const scenarios: ScenarioTemplate[] = [
       "A cash transfer from an agency account to the manager occurred six weeks before Ai's death.",
       "Building access logs show an alias that nobody has explained entering the property that week.",
       "The fan has been almost saying something for days. He keeps stopping himself.",
+      "The alias on the access log was used three times before — all on production days the director ran.",
     ],
     npcOverrides: {
       Director: {
@@ -549,6 +673,7 @@ const scenarios: ScenarioTemplate[] = [
       "Ai's filing cabinet was disturbed — items removed, order wrong.",
       "The fan noted the apartment lights were on unusually early that evening.",
       "Ruby remembers Ai saying something about 'insurance' months before she died.",
+      "A production assistant saw the director's car outside Ai's building that afternoon.",
     ],
     npcOverrides: {
       Director: {
@@ -578,6 +703,7 @@ const scenarios: ScenarioTemplate[] = [
       "A deleted email thread on Ai's device points to a journalist contact.",
       "The manager reacts with disproportionate fear when Aqua's origins are mentioned.",
       "The executive had legal on standby before the death became public — too early for a normal response.",
+      "The director cancelled all his meetings the day after Ai's death and turned his phone off for six hours.",
     ],
     npcOverrides: {
       Director: {
@@ -609,6 +735,7 @@ const scenarios: ScenarioTemplate[] = [
       "The fan's phone contains eight months of messages with an account that no longer exists.",
       "A security report dated six weeks before Ai's death is in the manager's files.",
       "Ruby can place the fan at four events in Ai's final month with unusual proximity.",
+      "CCTV shows the fan walking toward Ai's street at 10:47pm the night she died.",
     ],
     npcOverrides: {
       Fan: {
@@ -638,6 +765,7 @@ const scenarios: ScenarioTemplate[] = [
       "Ruby has Ai's private message archive — the screenshot conversation isn't in it anywhere.",
       "The director has graphic editing software and a history of document alteration.",
       "The fan can describe the screenshot in exact detail — specific enough to trace if anyone knows where to look.",
+      "The fan's fingerprints were found on the front door handle — he was there.",
     ],
     npcOverrides: {
       Fan: {
@@ -667,6 +795,7 @@ const scenarios: ScenarioTemplate[] = [
       "Security footage places the fan on the street outside Ai's house on four separate dates.",
       "The manager received security flags that he filed without escalating.",
       "Ruby remembers mentioning the fan to Ai and Ai's reaction was strange — almost resigned.",
+      "The fan was found two blocks away an hour after the estimated time of death, visibly distressed.",
     ],
     npcOverrides: {
       Fan: {
@@ -696,6 +825,7 @@ const scenarios: ScenarioTemplate[] = [
       "The fan received a message from an unregistered number six days before Ai died — the message contained an address and a photo.",
       "The father exists and is findable. He has not come forward. He is somewhere in the industry.",
       "Ruby found a photo in Ai's things — a man she doesn't recognise, a note on the back that says 'he knows'.",
+      "The fan was found near the scene with a knife — he didn't resist arrest and kept saying 'she lied to everyone'.",
     ],
     npcOverrides: {
       Fan: {
@@ -743,6 +873,7 @@ const scenarios: ScenarioTemplate[] = [
       "A burner phone was found near the scene. One unregistered number saved.",
       "The director's reaction when the executive is mentioned is disproportionate and specific.",
       "Ruby has a handwritten list from Ai's things — names, dates, no explanation.",
+      "The executive's security contractor visited the area twice in the week before Ai's death.",
     ],
     npcOverrides: {
       Executive: {
@@ -769,9 +900,10 @@ const scenarios: ScenarioTemplate[] = [
       "The executive had a communications strategy drafted before the police were called.",
     ],
     globalClues: [
-      "A surveillance log on the fan predates Ai's death by six weeks — agency contractors.",
+      "A surveillance log on the fan predates Ai's death by six weeks — agency contractors hired by the executive.",
       "Ruby found an unfamiliar agency letterhead in Ai's files — a contract draft.",
       "The executive had counsel briefed and a communications strategy drafted before police arrived.",
+      "The executive's PA sent an encrypted message at 10:52pm — twelve minutes before Ai's body was found.",
     ],
     npcOverrides: {
       Executive: {
@@ -801,6 +933,7 @@ const scenarios: ScenarioTemplate[] = [
       "Ai's notes reference 'something for Aqua' — Ruby found it and doesn't understand it yet.",
       "The director's fear when the executive's name comes up is not general — it's specific to something old.",
       "The executive's background has a gap of eight months fifteen years ago that appears on no official record.",
+      "The executive requested a private meeting with Ai three days before she died — no one else was invited.",
     ],
     npcOverrides: {
       Executive: {
@@ -815,6 +948,74 @@ const scenarios: ScenarioTemplate[] = [
     sideDeals: buildSideDeals(),
   },
 ];
+
+// ─── GOSSIP POOL BUILDER ─────────────────────────────────────────────────────
+// Generates a pre-determined pool of gossip from scenario data.
+// All entries are killer-specific because they come from globalClues + truthSummary.
+// Released one per turn so the player gets reliable breadcrumbs throughout the game.
+
+function buildGossipPool(scenario: ScenarioTemplate): GossipEntry[] {
+  const sources = [
+    "fan site", "industry contact", "rival agency",
+    "stylist network", "B-Komachi staff", "venue security",
+    "entertainment blog", "Ruby overheard",
+  ] as const;
+
+  const pool: GossipEntry[] = [
+    // Turn 0 — atmosphere entries, always present
+    {
+      turn: 0,
+      text: "Fan forums are in chaos. Ai Hoshino found dead at her home. No official cause of death released.",
+      source: "fan site",
+      relatedTo: null,
+    },
+    {
+      turn: 0,
+      text: "Industry sources say the agency had legal counsel briefed before police were notified. Nobody is explaining the timeline.",
+      source: "industry contact",
+      relatedTo: "Executive",
+    },
+    // Global clues rephrased as leaks — all point at the killer
+    ...scenario.globalClues.map((clue, i) => ({
+      turn: -1, // -1 = queued, released progressively during gameplay
+      text: rephrasedAsGossip(clue, scenario.killer, i),
+      source: sources[(i + 2) % sources.length],
+      relatedTo: scenario.killer as NPCName,
+    })),
+    // Truth summary entries — deeper context that surfaces later
+    ...scenario.truthSummary.map((truth, i) => ({
+      turn: -1,
+      text: rephrasedAsTruthLeak(truth, i),
+      source: sources[(i + 4) % sources.length],
+      relatedTo: scenario.killer as NPCName,
+    })),
+  ];
+
+  return pool;
+}
+
+// Rephrase a direct clue as something overheard or leaked
+function rephrasedAsGossip(clue: string, killer: SuspectName, index: number): string {
+  const prefixes = [
+    `Word reaching rival agencies: `,
+    `A source close to the investigation says `,
+    `Circulating in industry group chats: `,
+    `A B-Komachi staff member mentioned off the record that `,
+    `Fan investigators online have noted that `,
+  ];
+  return prefixes[index % prefixes.length] + clue.charAt(0).toLowerCase() + clue.slice(1);
+}
+
+// Rephrase a truth summary as an indirect industry leak
+function rephrasedAsTruthLeak(truth: string, index: number): string {
+  const prefixes = [
+    `Someone close to Ai told a mutual contact that `,
+    `Industry insiders are quietly saying that `,
+    `Ruby overheard something at the agency: `,
+    `A stylist who worked with B-Komachi says `,
+  ];
+  return prefixes[index % prefixes.length] + truth.charAt(0).toLowerCase() + truth.slice(1);
+}
 
 // ─── WORLD BUILDER ────────────────────────────────────────────────────────────
 
@@ -883,15 +1084,20 @@ export function createNewGame(): WorldState {
     globalClues: selected.globalClues,
     cluesDiscovered: [],
     contradictionsFound: [],
+    confirmedTruths: [],
     investigationLog: [
       "Ai has been found dead at the front of the house.",
       "Aqua begins the investigation.",
     ],
     elicitationLog: [],
+    powerDynamics: buildPowerDynamics(selected.killer),
+    gossipFeed: buildGossipPool(selected),
     aquaMood: "focused",
     aquaReputation: "Unknown — nobody has spoken to Aqua yet.",
     sideDeals: selected.sideDeals ?? buildSideDeals(),
+    activeDeals: [],
     questionedOrder: [],
     npcs,
   };
+
 }

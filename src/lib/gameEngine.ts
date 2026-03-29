@@ -2,6 +2,7 @@ import {
   AquaMood,
   ElicitationEntry,
   ExtractionResult,
+  GossipEntry,
   Mood,
   NPCName,
   SuspectName,
@@ -131,6 +132,7 @@ export function applyExtractionToWorld(
   extraction: ExtractionResult,
 ): WorldState {
   const next: WorldState = JSON.parse(JSON.stringify(world));
+  if (!next.confirmedTruths) next.confirmedTruths = [];
   const npc = next.npcs[npcName];
 
   next.turn += 1;
@@ -235,6 +237,87 @@ export function applyExtractionToWorld(
     }
   }
 
+  // ── Power dynamics — drip gossip hints when relevant NPCs are questioned ──
+  if (next.powerDynamics) {
+    for (const dynamic of next.powerDynamics) {
+      if (dynamic.exposed) continue;
+      // Surface a hint if we just questioned one of the parties in this dynamic
+      if (dynamic.holder === npcName || dynamic.subject === npcName) {
+        const nextHint = dynamic.gossipHints[dynamic.hintsCollected];
+        if (nextHint && !next.gossipFeed.find(g => g.text === nextHint)) {
+          dynamic.hintsCollected += 1;
+          next.gossipFeed.push({
+            turn: next.turn,
+            text: nextHint,
+            source: "industry contact",
+            relatedTo: dynamic.holder,
+          });
+          // If we've collected enough hints, expose the implication
+          if (dynamic.hintsCollected >= dynamic.hintsNeeded) {
+            dynamic.exposed = true;
+            next.gossipFeed.push({
+              turn: next.turn,
+              text: `CONFIRMED DYNAMIC: ${dynamic.killerImplication}`,
+              source: "multiple sources",
+              relatedTo: dynamic.holder,
+            });
+            pushUnique(next.cluesDiscovered, dynamic.killerImplication);
+            next.investigationLog.push(`[power dynamic exposed] ${dynamic.killerImplication}`);
+          }
+        }
+      }
+    }
+  }
+
+  // ── Industry gossip feed ────────────────────────────────────────────────
+  if (!next.gossipFeed) next.gossipFeed = [];
+
+  // Release one queued gossip entry per turn (turn: -1 = queued)
+  // This drip-feeds killer-specific clues from the scenario's truth data
+  const queued = next.gossipFeed.filter((g: GossipEntry) => g.turn === -1);
+  if (queued.length > 0) {
+    // Release every 1-2 turns so clues arrive steadily
+    const releaseIndex = Math.floor(Math.random() * Math.min(queued.length, 2));
+    queued[releaseIndex].turn = next.turn;
+  }
+
+  // Also add AI-generated gossip if it came back — but only as supplementary colour
+  if (extraction.industryGossip) {
+    next.gossipFeed.push({
+      turn: next.turn,
+      text: extraction.industryGossip,
+      source: extraction.gossipSource ?? "industry contact",
+      relatedTo: extraction.gossipRelatedTo ?? null,
+    });
+  }
+
+  // Cap total gossip shown to 15 entries (keep queued ones, trim visible ones)
+  const visible = next.gossipFeed.filter((g: GossipEntry) => g.turn >= 0);
+  const stillQueued = next.gossipFeed.filter((g: GossipEntry) => g.turn === -1);
+  if (visible.length > 15) {
+    next.gossipFeed = [...stillQueued, ...visible.slice(-15)];
+  }
+
+  // Surface side deals when enough related gossip has accumulated
+  for (const deal of next.sideDeals ?? []) {
+    if (deal.discovered) continue;
+    const relatedGossip = next.gossipFeed.filter(
+      (g: GossipEntry) => g.turn >= 0 && deal.parties.some((p: string) =>
+        g.relatedTo === p || g.text.toLowerCase().includes(p.toLowerCase())
+      )
+    );
+    if (relatedGossip.length >= 2) {
+      deal.discovered = true;
+      next.gossipFeed.push({
+        turn: next.turn,
+        text: `CONFIRMED: ${deal.exposedDescription}`,
+        source: "multiple sources",
+        relatedTo: deal.parties[0] as NPCName,
+      });
+      next.investigationLog.push(`[deal exposed] ${deal.exposedDescription}`);
+    }
+  }
+
   // ── Rumour spread (existing system) ─────────────────────────────────────
   if (extraction.rumor) {
     const others = (Object.keys(next.npcs) as NPCName[])
@@ -261,7 +344,7 @@ export function applyExtractionToWorld(
   next.aquaReputation = deriveReputation(next);
 
   // ── Unlock kill ──────────────────────────────────────────────────────────
-  if (next.turn >= 3 || next.cluesDiscovered.length >= 1) {
+  if (next.turn >= 2 || next.cluesDiscovered.length >= 1) {
     next.accusationUnlocked = true;
   }
 

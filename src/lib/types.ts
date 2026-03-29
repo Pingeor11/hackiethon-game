@@ -27,23 +27,31 @@ export interface NPCState {
   rumorsHeard: string[];
   revealedClues: string[];
   isKillerCandidate: boolean;
-  // how this NPC feels about Aqua specifically beyond trust/suspicion
   aquaRelationship: string;
-  // messages this NPC has sent to others after being questioned
   sentMessages: string[];
-  // whether this NPC has been warned by someone else about Aqua
   warnedAboutAqua: boolean;
-  // side deals this NPC is involved in that have been surfaced
   exposedDeals: string[];
 }
 
 export interface SideDeal {
   id: string;
   parties: NPCName[];
-  description: string;          // what the deal is
-  surfaceClue: string;          // what triggers it being discoverable
-  exposedDescription: string;   // what Aqua learns when she discovers it
+  description: string;
+  surfaceClue: string;
+  exposedDescription: string;
   discovered: boolean;
+}
+
+export interface PowerDynamic {
+  id: string;
+  holder: NPCName;
+  subject: NPCName;
+  description: string;
+  gossipHints: string[];
+  killerImplication: string;
+  hintsNeeded: number;
+  hintsCollected: number;
+  exposed: boolean;
 }
 
 export interface ScenarioTemplate {
@@ -54,7 +62,21 @@ export interface ScenarioTemplate {
   truthSummary: string[];
   globalClues: string[];
   npcOverrides: Partial<Record<NPCName, Partial<NPCState>>>;
-  sideDeals: SideDeal[];        // deals baked into this scenario
+  sideDeals: SideDeal[];
+}
+
+export interface GossipEntry {
+  turn: number;
+  text: string;
+  source: string;
+  relatedTo: NPCName | null;
+}
+
+// ── Confirmed Truth — earned by completing a deal ────────────────────────────
+export interface ConfirmedTruth {
+  source: NPCName;   // who revealed it
+  truth: string;     // what they said
+  turn: number;      // when it was earned
 }
 
 export interface WorldState {
@@ -65,6 +87,8 @@ export interface WorldState {
   accusationUnlocked: boolean;
   gameOver: boolean;
   winner: boolean;
+  gossipFeed: GossipEntry[];
+  powerDynamics: PowerDynamic[];
 
   selectedScenarioId: string;
   killer: SuspectName;
@@ -78,16 +102,16 @@ export interface WorldState {
   investigationLog: string[];
   elicitationLog: ElicitationEntry[];
 
-  // Aqua's current emotional state — driven by how she phrases things
   aquaMood: AquaMood;
-  aquaReputation: string;       // one-line summary of how NPCs see Aqua right now
+  aquaReputation: string;
 
-  // side deals in this run — some discovered, some hidden
   sideDeals: SideDeal[];
+  activeDeals: ActiveDeal[];
 
-  // NPCs Aqua has spoken to this run (order matters)
+  // Truths confirmed through completed deals — shown in notebook
+  confirmedTruths: ConfirmedTruth[];
+
   questionedOrder: NPCName[];
-
   npcs: Record<NPCName, NPCState>;
 }
 
@@ -111,6 +135,33 @@ export interface ChatResponseBody {
   updatedWorldState: WorldState;
   elicitationFeedback?: string | null;
   sideDealSurfaced?: string | null;
+  barterOffer?: BarterOffer | null;
+  // New — triggers cinematic reveal
+  dealFulfilled?: DealFulfilledPayload | null;
+}
+
+export interface DealFulfilledPayload {
+  npcName: NPCName;
+  truth: string;
+  reward: string;
+}
+
+export interface BarterOffer {
+  npcName: NPCName;
+  offer: string;
+  asking: string;
+  taskTarget: NPCName | null;
+  truthIndex: number;
+}
+
+export interface ActiveDeal {
+  npcName: NPCName;
+  task: string;
+  taskTarget: NPCName | null;
+  reward: string;
+  truthIndex: number;
+  status: "pending" | "fulfilled";
+  revealedTruth?: string;   // populated when fulfilled
 }
 
 export interface ExtractionResult {
@@ -122,9 +173,10 @@ export interface ExtractionResult {
   memorySummary: string;
   elicitationWorked: boolean;
   elicitationNote: string | null;
-  // detected emotional tone of Aqua's message
   aquaTone: "cold" | "grieving" | "focused" | "angry" | "desperate" | "neutral";
-  // message this NPC would send to a specific other NPC after this exchange
   npcBackchannelTarget: NPCName | null;
   npcBackchannelMessage: string | null;
+  industryGossip: string | null;
+  gossipSource: string | null;
+  gossipRelatedTo: NPCName | null;
 }
