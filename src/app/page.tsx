@@ -187,6 +187,219 @@ function DealRevealCinematic({
   );
 }
 
+// ── Relationship Map ──────────────────────────────────────────────────────────
+// Pentagon layout of the 5 suspects. Directed arrows show power dynamics.
+// Unexposed = faint dashed. Partially hinted = dim solid. Fully exposed = bright + label.
+
+const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
+  Manager:   { x: 130, y: 30  },
+  CoIdol:    { x: 240, y: 105 },
+  Director:  { x: 195, y: 225 },
+  Fan:       { x: 65,  y: 225 },
+  Executive: { x: 20,  y: 105 },
+};
+
+// Map dynamic id → which node it points FROM and TO
+const DYNAMIC_ENDPOINTS: Record<string, { from: string; to: string }> = {
+  manager_controls_coidol:    { from: "Manager",   to: "CoIdol"   },
+  executive_owns_manager:     { from: "Executive", to: "Manager"  },
+  director_indebted_executive:{ from: "Director",  to: "Executive"},
+  executive_surveilled_fan:   { from: "Executive", to: "Fan"      },
+  coidol_ai_rivalry:          { from: "CoIdol",    to: "CoIdol"   }, // self-loop
+};
+
+function RelationshipMap({ dynamics }: { dynamics: any[] }) {
+  const W = 260, H = 260;
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      width="100%"
+      style={{ display: "block", marginTop: "6px" }}
+    >
+      <defs>
+        {/* Arrow markers at different opacities */}
+        {["dim", "mid", "bright"].map(level => (
+          <marker
+            key={level}
+            id={`arrow-${level}`}
+            markerWidth="6" markerHeight="6"
+            refX="5" refY="3"
+            orient="auto"
+          >
+            <path
+              d="M0,0 L0,6 L6,3 z"
+              fill={level === "bright" ? "#f472b6" : level === "mid" ? "#6b3080" : "#2a0a38"}
+            />
+          </marker>
+        ))}
+      </defs>
+
+      {/* ── Edges ── */}
+      {dynamics.map((d: any) => {
+        const ep = DYNAMIC_ENDPOINTS[d.id];
+        if (!ep) return null;
+
+        const from = NODE_POSITIONS[ep.from];
+        const to = NODE_POSITIONS[ep.to];
+        if (!from || !to) return null;
+
+        // Self-loop (CoIdol rivalry) — small arc above the node
+        if (ep.from === ep.to) {
+          const cx = from.x;
+          const cy = from.y - 22;
+          const exposed = d.exposed;
+          const hinted = d.hintsCollected > 0;
+          return (
+            <g key={d.id}>
+              <path
+                d={`M${cx - 10},${from.y - 8} Q${cx - 28},${cy} ${cx + 10},${from.y - 8}`}
+                fill="none"
+                stroke={exposed ? "#f472b6" : hinted ? "#6b3080" : "#2a0a38"}
+                strokeWidth={exposed ? 1.5 : 1}
+                strokeDasharray={exposed ? "none" : hinted ? "none" : "3 3"}
+                markerEnd={`url(#arrow-${exposed ? "bright" : hinted ? "mid" : "dim"})`}
+                opacity={exposed ? 1 : hinted ? 0.6 : 0.3}
+              />
+              {exposed && (
+                <text
+                  x={cx - 26} y={cy - 4}
+                  fontSize="5" fill="#f472b699"
+                  fontFamily="'Press Start 2P', monospace"
+                  style={{ letterSpacing: "0.02em" }}
+                >
+                  RIVALRY
+                </text>
+              )}
+            </g>
+          );
+        }
+
+        // Calculate edge endpoints offset from node centre
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const nx = dx / len, ny = dy / len;
+        const r = 16; // node radius
+        const x1 = from.x + nx * r;
+        const y1 = from.y + ny * r;
+        const x2 = to.x - nx * (r + 4);
+        const y2 = to.y - ny * (r + 4);
+
+        // Slight curve
+        const mx = (x1 + x2) / 2 - ny * 18;
+        const my = (y1 + y2) / 2 + nx * 18;
+
+        const exposed = d.exposed;
+        const hinted = d.hintsCollected > 0;
+
+        // Midpoint of curve for label
+        const lx = 0.25 * x1 + 0.5 * mx + 0.25 * x2;
+        const ly = 0.25 * y1 + 0.5 * my + 0.25 * y2;
+
+        return (
+          <g key={d.id}>
+            <path
+              d={`M${x1},${y1} Q${mx},${my} ${x2},${y2}`}
+              fill="none"
+              stroke={exposed ? "#f472b6" : hinted ? "#6b3080" : "#2a0a38"}
+              strokeWidth={exposed ? 1.5 : 1}
+              strokeDasharray={exposed ? "none" : hinted ? "none" : "3 3"}
+              markerEnd={`url(#arrow-${exposed ? "bright" : hinted ? "mid" : "dim"})`}
+              opacity={exposed ? 1 : hinted ? 0.65 : 0.3}
+            />
+            {/* Hint count badge when partially known */}
+            {hinted && !exposed && (
+              <text
+                x={lx} y={ly}
+                fontSize="6" fill="#6b3080"
+                fontFamily="monospace" textAnchor="middle"
+              >
+                {d.hintsCollected}/{d.hintsNeeded}
+              </text>
+            )}
+            {/* Exposed label — short keyword */}
+            {exposed && (
+              <text
+                x={lx} y={ly - 3}
+                fontSize="5" fill="#f472b699"
+                fontFamily="'Press Start 2P', monospace"
+                textAnchor="middle"
+                style={{ letterSpacing: "0.02em" }}
+              >
+                {d.id === "executive_owns_manager"     ? "OWNS"      :
+                 d.id === "manager_controls_coidol"    ? "CONTROLS"  :
+                 d.id === "director_indebted_executive"? "OWES"      :
+                 d.id === "executive_surveilled_fan"   ? "SURVEILS"  : "↑"}
+              </text>
+            )}
+          </g>
+        );
+      })}
+
+      {/* ── Nodes ── */}
+      {Object.entries(NODE_POSITIONS).map(([name, pos]) => {
+        // Is this node involved in any exposed dynamic?
+        const isActive = dynamics.some(
+          d => d.exposed && (
+            DYNAMIC_ENDPOINTS[d.id]?.from === name ||
+            DYNAMIC_ENDPOINTS[d.id]?.to === name
+          )
+        );
+        const isHinted = !isActive && dynamics.some(
+          d => d.hintsCollected > 0 && (
+            DYNAMIC_ENDPOINTS[d.id]?.from === name ||
+            DYNAMIC_ENDPOINTS[d.id]?.to === name
+          )
+        );
+
+        return (
+          <g key={name}>
+            {/* Glow ring for active nodes */}
+            {isActive && (
+              <circle
+                cx={pos.x} cy={pos.y} r={19}
+                fill="none"
+                stroke="#f472b6"
+                strokeWidth="0.5"
+                opacity="0.3"
+              />
+            )}
+            <circle
+              cx={pos.x} cy={pos.y} r={14}
+              fill="#0e0420"
+              stroke={isActive ? "#f472b6" : isHinted ? "#6b3080" : "#2a0a38"}
+              strokeWidth={isActive ? 1.5 : 1}
+            />
+            <text
+              x={pos.x} y={pos.y + 2}
+              fontSize="5"
+              fill={isActive ? "#f472b6" : isHinted ? "#c084fc" : "#4a1060"}
+              fontFamily="'Press Start 2P', monospace"
+              textAnchor="middle"
+              dominantBaseline="middle"
+            >
+              {name === "CoIdol" ? "CO" :
+               name === "Executive" ? "EXEC" :
+               name.slice(0, 3).toUpperCase()}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* ── Legend ── */}
+      <g transform="translate(0, 248)">
+        <line x1="0" y1="5" x2="10" y2="5" stroke="#2a0a38" strokeWidth="1" strokeDasharray="3 2" />
+        <text x="13" y="8" fontSize="5" fill="#3a1050" fontFamily="monospace">UNKNOWN</text>
+        <line x1="60" y1="5" x2="70" y2="5" stroke="#6b3080" strokeWidth="1" />
+        <text x="73" y="8" fontSize="5" fill="#6b3080" fontFamily="monospace">HINTED</text>
+        <line x1="112" y1="5" x2="122" y2="5" stroke="#f472b6" strokeWidth="1.5" />
+        <text x="125" y="8" fontSize="5" fill="#f472b699" fontFamily="monospace">EXPOSED</text>
+      </g>
+    </svg>
+  );
+}
+
 export default function HomePage() {
   const [worldState, setWorldState] = useState<WorldState | null>(null);
   const [showIntro, setShowIntro] = useState(false);
@@ -207,6 +420,8 @@ export default function HomePage() {
   const [dealReveal, setDealReveal] = useState<DealFulfilledPayload | null>(null);
   // Soft hint when Gate 1 passed but Gate 2 failed
   const [dealHint, setDealHint] = useState<string | null>(null);
+  // Backchannel toast — NPC warned someone after this conversation
+  const [backchannelToast, setBackchannelToast] = useState<{ from: string; to: string; message: string } | null>(null);
 
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const [sceneRect, setSceneRect] = useState({ width: SCENE_WIDTH, height: SCENE_HEIGHT });
@@ -354,6 +569,26 @@ export default function HomePage() {
     if (data.dealHint) {
       setDealHint(data.dealHint);
       setTimeout(() => setDealHint(null), 6000);
+    }
+
+    // Backchannel toast — fires after reply, feels like intercepted intel
+    if (data.backchannelDetected && data.updatedWorldState) {
+      // Parse "X contacted Y after this conversation"
+      const match = data.backchannelDetected.match(/^(.+?) contacted (.+?) after/);
+      if (match) {
+        const bcFrom = match[1].trim();
+        const bcTo = match[2].trim();
+        // Find the backchannel message from the NPC state
+        const targetNPC = data.updatedWorldState.npcs[bcTo];
+        const recentRumor = targetNPC?.rumorsHeard?.slice(-1)[0] ?? null;
+        const bcMessage = recentRumor?.includes("told me:") 
+          ? recentRumor.split('"')[1] ?? "something about your questions"
+          : "something about your questions";
+        setTimeout(() => {
+          setBackchannelToast({ from: bcFrom, to: bcTo, message: bcMessage });
+          setTimeout(() => setBackchannelToast(null), 6000);
+        }, 1200); // slight delay so it feels like it happened after the conversation
+      }
     }
 
     setLoading(false);
@@ -623,23 +858,10 @@ export default function HomePage() {
               </>
             )}
 
-            {/* ── Techniques ── */}
+            {/* ── Relationship Map — power dynamics between suspects ── */}
             <div className="nb-section">
-              <h4>▸ TECHNIQUES</h4>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
-                {[
-                  "FLATTERY", "NAIVE FACADE", "MISSTATEMENT", "SHARED GRIEVANCE",
-                  "QUID PRO QUO", "ASSUMPTIVE Q", "SILENCE", "APPEAL TO VANITY",
-                  "INDIRECT", "EMOTIONAL BOND", "BAITING", "THIRD PARTY",
-                ].map((t) => (
-                  <span key={t} style={{
-                    fontFamily: "'Press Start 2P', monospace",
-                    fontSize: "6px", padding: "4px 6px",
-                    border: "1px solid #3a1050", background: "#180a22",
-                    color: "#c084fc", letterSpacing: "0.04em",
-                  }}>{t}</span>
-                ))}
-              </div>
+              <h4>▸ POWER MAP</h4>
+              <RelationshipMap dynamics={worldState.powerDynamics ?? []} />
             </div>
 
           </div>
@@ -851,6 +1073,59 @@ export default function HomePage() {
           boxShadow: "0 0 20px #7c3aed33",
         }}>
           ❖ NOT QUITE — {dealHint}
+        </div>
+      )}
+
+      {/* ── Backchannel toast — NPC warned someone after this conversation ── */}
+      {backchannelToast && (
+        <div style={{
+          position: "fixed", top: "52px", right: "16px",
+          zIndex: 302,
+          background: "#0a0e1a",
+          border: "1px solid #0ea5e944",
+          padding: "10px 14px",
+          maxWidth: "300px",
+          fontFamily: "'Press Start 2P', monospace",
+          boxShadow: "0 0 20px #0ea5e922",
+          animation: "bc-slide-in 0.3s ease forwards",
+        }}>
+          {/* Header */}
+          <div style={{
+            fontSize: "6px", color: "#0ea5e9", letterSpacing: "0.12em",
+            marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px",
+          }}>
+            <span style={{ animation: "blink 1s step-end infinite" }}>◉</span>
+            INTERCEPTED
+          </div>
+          {/* From → To */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: "6px",
+            marginBottom: "7px",
+          }}>
+            <span style={{
+              fontFamily: "'Press Start 2P', monospace", fontSize: "6px",
+              color: "#f472b6", padding: "2px 6px",
+              border: "1px solid #f472b633", background: "#1c0535",
+            }}>
+              {backchannelToast.from.toUpperCase()}
+            </span>
+            <span style={{ fontSize: "10px", color: "#0ea5e9" }}>→</span>
+            <span style={{
+              fontFamily: "'Press Start 2P', monospace", fontSize: "6px",
+              color: "#f472b6", padding: "2px 6px",
+              border: "1px solid #f472b633", background: "#1c0535",
+            }}>
+              {backchannelToast.to.toUpperCase()}
+            </span>
+          </div>
+          {/* Message */}
+          <div style={{
+            fontFamily: "'VT323', monospace", fontSize: "15px",
+            color: "#94a3b8", lineHeight: "1.4",
+            borderLeft: "2px solid #0ea5e944", paddingLeft: "8px",
+          }}>
+            "{backchannelToast.message}"
+          </div>
         </div>
       )}
 
@@ -1075,6 +1350,7 @@ export default function HomePage() {
         .cursor { animation:blink .55s step-end infinite; color:#f472b6; }
 
         @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes bc-slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
         ::-webkit-scrollbar{width:5px;}
         ::-webkit-scrollbar-track{background:#0d0514;}
         ::-webkit-scrollbar-thumb{background:#2a0a38;}
