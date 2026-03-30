@@ -774,7 +774,7 @@ export default function HomePage() {
           ))}
           <div style={{ width:"60px", height:"1px", background:"#f472b644", margin:"4px auto", animation:"fadeInUp 0.8s ease forwards", animationDelay:"2.4s", opacity:0 }} />
           <div style={{ fontSize:"9px", color:"#e879f9", letterSpacing:"0.14em", lineHeight:"2", animation:"fadeInUp 0.8s ease forwards", animationDelay:"2.8s", opacity:0 }}>YOU ARE AI'S SON — AQUA HOSHINO.</div>
-          <div style={{ fontSize:"11px", color:"#f472b6", letterSpacing:"0.2em", animation:"fadeInUp 0.8s ease forwards, pulse-glow 2s ease-in-out infinite", animationDelay:"3.4s", opacity:0, textShadow:"0 0 20px #f472b6aa" }}>FIND OUT WHO DID IT.</div>
+          <div style={{ fontSize:"11px", color:"#f472b6", letterSpacing:"0.2em", animation:"fadeInUp 0.8s ease forwards, pulse-glow 2s ease-in-out infinite", animationDelay:"3.4s", opacity:0, textShadow:"0 0 20px #f472b6aa" }}>FIND OUT AND KILL WHO DID IT.</div>
         </div>
         <div style={{ fontSize:"6px", color:"#3a1050", letterSpacing:"0.14em", animation:"blink 1.2s step-end infinite, fadeInUp 0.8s ease forwards", animationDelay:"4s", opacity:0 }}>CLICK ANYWHERE TO BEGIN</div>
       </div>
