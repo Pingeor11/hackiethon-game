@@ -353,6 +353,64 @@ export function buildDealRevealPrompt(
   return lines.filter(l => l !== ``).join("\n").trim();
 }
 
+// ─── CONFRONTATION PROMPT ─────────────────────────────────────────────────────
+// Called when Aqua presses KILL. The accused NPC responds to being confronted.
+// Killer and innocent NPCs respond completely differently.
+// 2-4 sentences. This is the dramatic peak of the game.
+
+export function buildConfrontationPrompt(
+  npc: NPCState,
+  world: WorldState,
+  isKiller: boolean,
+): string {
+  const cluesFound = world.cluesDiscovered.slice(-4).join(" | ") || "nothing concrete";
+  const confirmedTruths = (world.confirmedTruths ?? [])
+    .map((t: any) => `${t.source}: ${t.truth}`).join(" | ") || "none";
+
+  const lines: string[] = [
+    `You are ${npc.name}, ${npc.role}.`,
+    `AI HOSHINO is NOT artificial intelligence. She is a famous idol found dead at her home.`,
+    `Aqua — her son — has just confronted you. He has accused you of killing her.`,
+    ``,
+    `WHO YOU ARE: ${npc.personality}`,
+    ``,
+    `WHAT AQUA HAS FOUND: ${cluesFound}`,
+    confirmedTruths !== "none" ? `WHAT AQUA HAS CONFIRMED: ${confirmedTruths}` : ``,
+    ``,
+
+    ...(isKiller ? [
+      `YOU DID IT. This is the moment.`,
+      `Aqua is standing in front of you and he knows — or thinks he knows.`,
+      ``,
+      `YOUR SECRET (what you actually did): ${npc.secret ?? ""}`,
+      `THE MOTIVE: ${world.motive}`,
+      ``,
+      `HOW YOU RESPOND:`,
+      `- ONE sentence only. No more.`,
+      `- You don't confess. But you don't fully deny it either.`,
+      `- Say the one thing that has been true this entire time — the reason, the grief, the weight of it.`,
+      `- The sentence should feel like a door closing, not a confession.`,
+      `- Stay in character completely.`,
+    ] : [
+      `YOU ARE INNOCENT. You did not kill Ai.`,
+      `Aqua has just accused you of something you did not do.`,
+      ``,
+      `YOUR ACTUAL SECRET (unrelated to murder): ${npc.secret ?? "nothing to hide"}`,
+      ``,
+      `HOW YOU RESPOND:`,
+      `- ONE sentence only. No more.`,
+      `- Shock, disbelief, or cold anger — whichever fits who you are.`,
+      `- Say the one thing that makes the accusation obviously wrong.`,
+      `- Stay completely in character.`,
+    ]),
+
+    ``,
+    `Your response (speak as ${npc.name}, this is the confrontation):`,
+  ];
+
+  return lines.filter(l => l !== ``).join("\n").trim();
+}
+
 // ─── RUBY PROMPT ──────────────────────────────────────────────────────────────
 
 export function buildRubyHelperPrompt(world: WorldState) {
@@ -498,7 +556,11 @@ export function buildRubyInterjectionPrompt(
   const confirmedTruths = (world.confirmedTruths ?? [])
     .map((t: any) => `${t.source} confirmed: ${t.truth}`);
 
-  const verifiedFacts = [...sceneClues, ...confirmedTruths];
+  const alreadyFlagged = (world.rubyFlagged ?? []);
+
+  // Filter out facts Ruby has already called out
+  const verifiedFacts = [...sceneClues, ...confirmedTruths]
+    .filter(f => !alreadyFlagged.some(flagged => f.includes(flagged.slice(0, 30))));
 
   if (verifiedFacts.length === 0) {
     return `Return ONLY this exact JSON: {"interject":false,"message":null}`;
@@ -506,7 +568,7 @@ export function buildRubyInterjectionPrompt(
 
   const lines = [
     `Return ONLY valid JSON, no markdown:`,
-    `{"interject":boolean,"message":string|null}`,
+    `{"interject":boolean,"message":string|null,"flaggedFact":string|null}`,
     ``,
     `You are Ruby — Aqua's sister. Sharp, fast, no filter.`,
     `You speak when an NPC says something that contradicts a verified fact.`,
@@ -518,7 +580,7 @@ export function buildRubyInterjectionPrompt(
     `VERIFIED FACTS — things Aqua has confirmed as true:`,
     verifiedFacts.map((f, i) => `${i + 1}. ${f}`).join("\n"),
     ``,
-    `INTERJECT IF:`,
+    `INTERJECT ONLY IF:`,
     `- ${npcName}'s reply contradicts or conflicts with one of the numbered facts`,
     `- ${npcName} claims something that cannot be true given what's verified`,
     `- ${npcName}'s account of events is inconsistent with the physical evidence`,
@@ -527,10 +589,12 @@ export function buildRubyInterjectionPrompt(
     `- The reply is consistent with all verified facts`,
     `- The NPC is just evasive, emotional, or unhelpful — not a factual contradiction`,
     `- You are not certain which fact is contradicted`,
-    `- The exchange was just small talk or neutral`,
+    `- The exchange was small talk, neutral, or just suspicious without a clear conflict`,
+    `- You would be stretching to make it a contradiction`,
     ``,
     `If you interject: one sharp sentence as Ruby, referencing the specific fact that conflicts.`,
     `Direct, not preachy. Don't start with "I noticed".`,
+    `flaggedFact: the first 30 characters of the fact number that was contradicted, or null if not interjecting.`,
     `message: null if not interjecting.`,
   ];
 

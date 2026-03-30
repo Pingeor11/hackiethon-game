@@ -116,6 +116,9 @@ export interface WorldState {
   // Truths confirmed through completed deals — shown in notebook
   confirmedTruths: ConfirmedTruth[];
 
+  // Facts Ruby has already flagged — she won't repeat the same one
+  rubyFlagged: string[];
+
   questionedOrder: NPCName[];
   npcs: Record<NPCName, NPCState>;
 }

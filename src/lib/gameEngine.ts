@@ -134,6 +134,7 @@ export function applyExtractionToWorld(
 
   // ── Safety initialisers — guard against missing fields after deep clone ──
   if (!next.confirmedTruths) next.confirmedTruths = [];
+  if (!next.rubyFlagged) next.rubyFlagged = [];
   for (const name of Object.keys(next.npcs)) {
     if (!next.npcs[name as NPCName].completedTaskFor) {
       next.npcs[name as NPCName].completedTaskFor = [];

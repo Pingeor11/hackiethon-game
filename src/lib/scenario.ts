@@ -1082,6 +1082,7 @@ export function createNewGame(): WorldState {
     cluesDiscovered: [],
     contradictionsFound: [],
     confirmedTruths: [],
+    rubyFlagged: [],
     investigationLog: [
       "Ai has been found dead at the front of the house.",
       "Aqua begins the investigation.",

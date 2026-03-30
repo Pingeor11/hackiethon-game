@@ -187,7 +187,130 @@ function DealRevealCinematic({
   );
 }
 
-// ── Relationship Map ──────────────────────────────────────────────────────────
+// ── Confrontation Cinematic ───────────────────────────────────────────────────
+function ConfrontationCinematic({
+  npcName,
+  reply,
+  isCorrect,
+  onComplete,
+}: {
+  npcName: SuspectName;
+  reply: string;
+  isCorrect: boolean;
+  onComplete: () => void;
+}) {
+  const [displayedText, setDisplayedText] = useState("");
+  const [done, setDone] = useState(false);
+
+  // Type out the confrontation reply word by word
+  useEffect(() => {
+    const words = reply.split(" ");
+    let i = 0;
+    let current = "";
+    const interval = setInterval(() => {
+      if (i >= words.length) {
+        clearInterval(interval);
+        setDone(true);
+        return;
+      }
+      current += (i === 0 ? "" : " ") + words[i];
+      setDisplayedText(current);
+      i++;
+    }, 40);
+    return () => clearInterval(interval);
+  }, [reply]);
+
+  const accentColor = isCorrect ? "#ff4a6a" : "#f472b6";
+  const accentDim   = isCorrect ? "#ff4a6a22" : "#f472b622";
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 850,
+        background: "rgba(2,0,6,0.98)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexDirection: "column",
+        fontFamily: "'Press Start 2P', monospace",
+        animation: "cinematic-in 0.5s ease forwards",
+        cursor: done ? "pointer" : "default",
+      }}
+      onClick={done ? onComplete : undefined}
+    >
+      {/* CRT */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
+        background: "repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.2) 3px,rgba(0,0,0,0.2) 4px)", zIndex: 2 }} />
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
+        background: "radial-gradient(ellipse at center,transparent 25%,rgba(2,0,6,0.92) 100%)", zIndex: 3 }} />
+
+      <div style={{
+        position: "relative", zIndex: 10,
+        maxWidth: "700px", width: "90%",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "28px",
+        padding: "52px 44px",
+        border: `2px solid ${accentColor}33`,
+        background: "rgba(8,2,14,0.99)",
+        boxShadow: `0 0 100px ${accentDim}`,
+      }}>
+        {/* NPC portrait + name */}
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div style={{
+            width: "48px", height: "48px",
+            border: `1px solid ${accentColor}55`, background: "#0a0116",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            overflow: "hidden", imageRendering: "pixelated",
+          }}>
+            <img
+              src={npcSpriteMap[npcName]}
+              alt={npcName}
+              style={{ width: "44px", height: "44px", objectFit: "contain", imageRendering: "pixelated" }}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <div style={{ fontSize: "8px", color: accentColor, letterSpacing: "0.14em" }}>
+              {npcName.toUpperCase()}
+            </div>
+            <div style={{ fontSize: "6px", color: "#6b3080", letterSpacing: "0.1em" }}>
+              CONFRONTED
+            </div>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: "100%", height: "1px", background: `${accentColor}22` }} />
+
+        {/* The reply */}
+        <div style={{
+          fontFamily: "'VT323', monospace",
+          fontSize: "24px", color: "#f0e8ff",
+          lineHeight: "1.7", textAlign: "center",
+          letterSpacing: "0.02em",
+          minHeight: "80px",
+          maxWidth: "580px",
+        }}>
+          "{displayedText}
+          {!done && <span style={{ animation: "blink .55s step-end infinite", color: accentColor }}>▌</span>}"
+        </div>
+
+        {/* Dismiss hint — appears after typing finishes */}
+        {done && (
+          <div style={{
+            fontSize: "6px", color: "#3a1050", letterSpacing: "0.12em",
+            animation: "blink 1.2s step-end infinite",
+          }}>
+            CLICK TO CONTINUE
+          </div>
+        )}
+      </div>
+
+      <style jsx>{`
+        @keyframes cinematic-in { from{opacity:0} to{opacity:1} }
+        @keyframes blink { 0%,100%{opacity:1}50%{opacity:0} }
+      `}</style>
+    </div>
+  );
+}
+
+
 // Pentagon layout of the 5 suspects. Directed arrows show power dynamics.
 // Unexposed = faint dashed. Partially hinted = dim solid. Fully exposed = bright + label.
 
@@ -363,6 +486,13 @@ export default function HomePage() {
   const [dealHint, setDealHint] = useState<string | null>(null);
   // Backchannel toast — NPC warned someone after this conversation
   const [backchannelToast, setBackchannelToast] = useState<{ from: string; to: string; message: string } | null>(null);
+  // Confrontation cinematic state
+  const [confrontation, setConfrontation] = useState<{
+    npcName: SuspectName;
+    reply: string;
+    isCorrect: boolean;
+    updatedWorldState: WorldState;
+  } | null>(null);
 
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const [sceneRect, setSceneRect] = useState({ width: SCENE_WIDTH, height: SCENE_HEIGHT });
@@ -564,19 +694,25 @@ export default function HomePage() {
   async function killNPC(npcName: SuspectName) {
     if (!worldState || loading || worldState.gameOver) return;
     setLoading(true);
+    setSelectedNPC(null);
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ npcName, kill: npcName, playerMessage: "", worldState }),
     });
     const data = await res.json();
-    if (data.updatedWorldState) {
-      setWorldState(data.updatedWorldState);
-    } else {
-      setWorldState({ ...worldState, gameOver: true, winner: data.reply?.includes("win") ?? false });
-    }
-    setSelectedNPC(null);
     setLoading(false);
+    // Trigger confrontation cinematic — world state update happens after it resolves
+    if (data.confrontationReply) {
+      setConfrontation({
+        npcName,
+        reply: data.confrontationReply,
+        isCorrect: data.isCorrect,
+        updatedWorldState: data.updatedWorldState,
+      });
+    } else if (data.updatedWorldState) {
+      setWorldState(data.updatedWorldState);
+    }
   }
 
   // ── Derived deal state ─────────────────────────────────────────────────────
@@ -644,6 +780,19 @@ export default function HomePage() {
     <main className="shell">
       <div className="scanlines" aria-hidden />
       <div className="vignette" aria-hidden />
+
+      {/* ── Confrontation Cinematic ── */}
+      {confrontation && (
+        <ConfrontationCinematic
+          npcName={confrontation.npcName}
+          reply={confrontation.reply}
+          isCorrect={confrontation.isCorrect}
+          onComplete={() => {
+            setWorldState(confrontation.updatedWorldState);
+            setConfrontation(null);
+          }}
+        />
+      )}
 
       {/* ── Deal Reveal Cinematic ── */}
       {dealReveal && (

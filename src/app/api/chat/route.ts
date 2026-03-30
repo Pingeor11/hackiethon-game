@@ -6,6 +6,7 @@ import {
   buildDealRevealPrompt,
   buildDealCompletionCheckPrompt,
   buildRubyInterjectionPrompt,
+  buildConfrontationPrompt,
 } from "@/lib/prompts";
 import { applyExtractionToWorld } from "@/lib/gameEngine";
 import { ChatRequestBody, ExtractionResult, ActiveDeal, NPCName } from "@/lib/types";
@@ -151,14 +152,21 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as ChatRequestBody & { kill?: string };
 
-    // ── KILL ──────────────────────────────────────────────────────────────────
+    // ── KILL — confrontation first, then resolution ───────────────────────────
     if (body.kill) {
       const target = body.kill;
       const isCorrect = target === body.worldState.killer;
+      const npcState = body.worldState.npcs[target];
+
+      // Generate the accused NPC's confrontation response
+      const confrontationReply = await callGroqText(
+        buildConfrontationPrompt(npcState, body.worldState, isCorrect)
+      );
+
       return NextResponse.json({
-        reply: isCorrect
-          ? `${target} was the murderer. You win.`
-          : `${target} was not the murderer. The real killer was ${body.worldState.killer}.`,
+        confrontationReply,
+        confrontationTarget: target,
+        isCorrect,
         updatedWorldState: {
           ...body.worldState,
           gameOver: true,
@@ -166,8 +174,8 @@ export async function POST(req: NextRequest) {
           investigationLog: [
             ...body.worldState.investigationLog,
             isCorrect
-              ? `Aqua killed ${target}. ${target} was the murderer.`
-              : `Aqua killed ${target}. ${target} was innocent. The real killer was ${body.worldState.killer}.`,
+              ? `Aqua confronted ${target}. ${target} was the murderer.`
+              : `Aqua confronted ${target}. ${target} was innocent. The real killer was ${body.worldState.killer}.`,
           ],
         },
         resetGame: false,
@@ -254,11 +262,11 @@ export async function POST(req: NextRequest) {
         fallbackExtraction,
       ),
       shouldCheckRuby
-        ? callGroqJson<{ interject: boolean; message: string | null }>(
+        ? callGroqJson<{ interject: boolean; message: string | null; flaggedFact: string | null }>(
             buildRubyInterjectionPrompt(body.npcName, body.playerMessage, reply, body.worldState),
-            { interject: false, message: null },
+            { interject: false, message: null, flaggedFact: null },
           )
-        : Promise.resolve({ interject: false, message: null }),
+        : Promise.resolve({ interject: false, message: null, flaggedFact: null }),
     ]);
 
     if (fulfilledDeal && dealRevealTruth) {
@@ -362,6 +370,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── STORE RUBY FLAGGED FACT ───────────────────────────────────────────────
+    if (rubyInterjectionResult?.interject && rubyInterjectionResult.flaggedFact) {
+      if (!updatedWorldState.rubyFlagged) updatedWorldState.rubyFlagged = [];
+      updatedWorldState.rubyFlagged.push(rubyInterjectionResult.flaggedFact);
+    }
+
     return NextResponse.json({
       reply,
       updatedWorldState,
@@ -381,7 +395,6 @@ export async function POST(req: NextRequest) {
       dealHint: !fulfilledDeal && gate2FailReason && pendingDealsForNPC.length > 0
         ? gate2FailReason
         : null,
-      // Ruby's unprompted interjection — only present when she has something specific to flag
       rubyInterjection: rubyInterjectionResult?.interject
         ? rubyInterjectionResult.message
         : null,
