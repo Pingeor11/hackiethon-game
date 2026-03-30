@@ -163,9 +163,11 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
   const exposedDeals = npc.exposedDeals ?? [];
   const isFirst = npc.memories.length === 0;
   const aquaMood = world.aquaMood ?? "focused";
+  const tension = world.tension ?? 0;
+  const tensionHigh = tension >= 7;
 
-  const recentMemories = npc.memories.slice(-6);
-  const recentRumours = npc.rumorsHeard.slice(-4);
+  const recentMemories = npc.memories.slice(-10);       // was -6
+  const recentRumours = npc.rumorsHeard.slice(-6);       // was -4
   const beliefsText = Object.entries(npc.beliefs ?? {})
     .map(([k, v]) => `${k}: ${v}`)
     .join("\n");
@@ -174,6 +176,11 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
   const isReturning = recentMemories.length > 0;
   const backchannelReceived = recentRumours.filter(r => r.includes("told me:"));
 
+  // Contradictions that implicate this NPC — they know they've been caught in something
+  const npcContradictions = (world.contradictionsFound ?? []).filter(c =>
+    c.toLowerCase().includes(npc.name.toLowerCase())
+  );
+
   const returningContext: string[] = [];
   if (isReturning) {
     if (backchannelReceived.length > 0) {
@@ -181,13 +188,16 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     } else if (wasWarned) {
       returningContext.push(`You've been warned that Aqua has been asking questions. You're not panicking — just aware. It colours how you listen more than how you speak.`);
     } else if (othersQuestioned.length > 0) {
-      returningContext.push(`You've heard through the usual channels that Aqua has been talking to ${othersQuestioned.slice(-2).join(" and ")}. You don't know what was said. You're a little curious.`);
+      returningContext.push(`You've heard through the usual channels that Aqua has been talking to ${othersQuestioned.slice(-4).join(", ")}. You don't know what was said. You're paying attention.`);
     }
     if (suspicionIsHigh) {
       returningContext.push(`Something about the last conversation sat with you. Not accusatory — just a vague sense that Aqua is looking for something specific. You're a bit more measured this time.`);
     }
     if (trustIsHigh) {
       returningContext.push(`The last conversation felt genuine. You're more open this time — not reckless, but warmer.`);
+    }
+    if (npcContradictions.length > 0) {
+      returningContext.push(`Aqua has already found something that doesn't line up with what you've said. You can feel it in the way the questions are landing. You're not sure exactly what they know, but you're more careful about what you confirm.`);
     }
   }
 
@@ -242,6 +252,20 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     trustIsLow ? `You're not very comfortable. Keep answers short.` : ``,
     suspicionIsHigh ? `You've started to wonder what Aqua is really after. You might gently ask.` : ``,
     isFirst ? `FIRST MEETING: Establish who you are. Be open and specific. Volunteer something.` : ``,
+
+    // ── High tension — the investigation has become visible ──────────────────
+    tensionHigh ? [
+      ``,
+      `ATMOSPHERE: The investigation has become visible. People are talking.`,
+      `Word has reached you that Aqua has been asking hard questions across the industry.`,
+      `You are not panicking — but you are more careful now. Specifically:`,
+      `- Your answers are slightly shorter than they would normally be`,
+      `- You weigh your words more carefully before answering`,
+      `- You might reference that you've heard Aqua has been talking to people`,
+      `- You protect yourself without shutting down — there's a difference between guarded and silent`,
+      `- You still talk. You still have things to say. You're just watching more carefully.`,
+    ].join("\n") : ``,
+
     ``,
     `RULES:`,
     `- 1-2 sentences only.`,
@@ -450,6 +474,64 @@ export function buildDealCompletionCheckPrompt(
     `- reason: one short sentence explaining your judgment — e.g. "Player reported what the Executive said about the sale" or "Message doesn't mention anything about the casting"`,
     `- Be lenient — if the player is clearly trying to report back and has something relevant, pass: true`,
     `- Be strict only on completely unrelated or empty messages`,
+  ];
+
+  return lines.join("\n").trim();
+}
+
+// ─── RUBY INTERJECTION PROMPT ─────────────────────────────────────────────────
+// Called after every NPC exchange. Ruby speaks when the NPC contradicts
+// something Aqua has specifically verified — scene facts or confirmed deal truths.
+// Returns JSON: { "interject": boolean, "message": string | null }
+
+export function buildRubyInterjectionPrompt(
+  npcName: string,
+  playerMessage: string,
+  npcReply: string,
+  world: WorldState,
+): string {
+  const sceneClues = [
+    ...(world.globalClues ?? []).slice(0, 3),
+    ...((world as any).methodClue ? [(world as any).methodClue] : []),
+  ];
+
+  const confirmedTruths = (world.confirmedTruths ?? [])
+    .map((t: any) => `${t.source} confirmed: ${t.truth}`);
+
+  const verifiedFacts = [...sceneClues, ...confirmedTruths];
+
+  if (verifiedFacts.length === 0) {
+    return `Return ONLY this exact JSON: {"interject":false,"message":null}`;
+  }
+
+  const lines = [
+    `Return ONLY valid JSON, no markdown:`,
+    `{"interject":boolean,"message":string|null}`,
+    ``,
+    `You are Ruby — Aqua's sister. Sharp, fast, no filter.`,
+    `You speak when an NPC says something that contradicts a verified fact.`,
+    ``,
+    `WHAT JUST HAPPENED:`,
+    `Aqua said to ${npcName}: "${playerMessage}"`,
+    `${npcName} replied: "${npcReply}"`,
+    ``,
+    `VERIFIED FACTS — things Aqua has confirmed as true:`,
+    verifiedFacts.map((f, i) => `${i + 1}. ${f}`).join("\n"),
+    ``,
+    `INTERJECT IF:`,
+    `- ${npcName}'s reply contradicts or conflicts with one of the numbered facts`,
+    `- ${npcName} claims something that cannot be true given what's verified`,
+    `- ${npcName}'s account of events is inconsistent with the physical evidence`,
+    ``,
+    `DO NOT interject if:`,
+    `- The reply is consistent with all verified facts`,
+    `- The NPC is just evasive, emotional, or unhelpful — not a factual contradiction`,
+    `- You are not certain which fact is contradicted`,
+    `- The exchange was just small talk or neutral`,
+    ``,
+    `If you interject: one sharp sentence as Ruby, referencing the specific fact that conflicts.`,
+    `Direct, not preachy. Don't start with "I noticed".`,
+    `message: null if not interjecting.`,
   ];
 
   return lines.join("\n").trim();

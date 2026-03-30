@@ -5,6 +5,7 @@ import {
   buildRubyHelperPrompt,
   buildDealRevealPrompt,
   buildDealCompletionCheckPrompt,
+  buildRubyInterjectionPrompt,
 } from "@/lib/prompts";
 import { applyExtractionToWorld } from "@/lib/gameEngine";
 import { ChatRequestBody, ExtractionResult, ActiveDeal, NPCName } from "@/lib/types";
@@ -226,7 +227,7 @@ export async function POST(req: NextRequest) {
 
     const reply = await callGroqText(replyPrompt);
 
-    // ── EXTRACTION ────────────────────────────────────────────────────────────
+    // ── EXTRACTION + RUBY INTERJECTION — run in parallel ─────────────────────
     const fallbackExtraction: ExtractionResult = {
       trustDelta: 0,
       suspicionDelta: 0.05,
@@ -244,10 +245,21 @@ export async function POST(req: NextRequest) {
       gossipRelatedTo: null,
     };
 
-    const extraction = await callGroqJson<ExtractionResult>(
-      buildExtractionPrompt(npc, body.playerMessage, reply, body.worldState),
-      fallbackExtraction,
-    );
+    // Ruby only interjects when talking to non-Ruby NPCs
+    const shouldCheckRuby = body.npcName !== "Ruby" && !fulfilledDeal;
+
+    const [extraction, rubyInterjectionResult] = await Promise.all([
+      callGroqJson<ExtractionResult>(
+        buildExtractionPrompt(npc, body.playerMessage, reply, body.worldState),
+        fallbackExtraction,
+      ),
+      shouldCheckRuby
+        ? callGroqJson<{ interject: boolean; message: string | null }>(
+            buildRubyInterjectionPrompt(body.npcName, body.playerMessage, reply, body.worldState),
+            { interject: false, message: null },
+          )
+        : Promise.resolve({ interject: false, message: null }),
+    ]);
 
     if (fulfilledDeal && dealRevealTruth) {
       extraction.discoveredClue = `[DEAL CONFIRMED] ${fulfilledDeal.npcName}: ${dealRevealTruth}`;
@@ -366,9 +378,12 @@ export async function POST(req: NextRequest) {
             reward: dealDefinitions[fulfilledDeal.npcName]?.offer ?? "",
           }
         : null,
-      // Soft hint when Gate 1 passed but Gate 2 failed — player is close but report wasn't enough
       dealHint: !fulfilledDeal && gate2FailReason && pendingDealsForNPC.length > 0
         ? gate2FailReason
+        : null,
+      // Ruby's unprompted interjection — only present when she has something specific to flag
+      rubyInterjection: rubyInterjectionResult?.interject
+        ? rubyInterjectionResult.message
         : null,
     });
 

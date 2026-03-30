@@ -155,9 +155,12 @@ export function applyExtractionToWorld(
   }
 
   // ── Tension ─────────────────────────────────────────────────────────────
-  if (extraction.discoveredClue || extraction.contradiction) {
+  if (extraction.contradiction) {
     next.tension += 1;
-  }
+  } else if (extraction.discoveredClue && extraction.discoveredClue.length > 40) {
+  // Only substantial clues raise tension, not short extractions
+  if (Math.random() < 0.7) next.tension += 1;
+}
 
   // ── Trust / suspicion — base + tone effect ───────────────────────────────
   const tone = toneEffect(extraction.aquaTone, npcName);
@@ -347,7 +350,7 @@ export function applyExtractionToWorld(
   }
 
   // ── Late game tension spike ───────────────────────────────────────────────
-  if (next.turn >= 10) next.tension += 1;
+  if (next.turn >= 11) next.tension += 1;
 
   return next;
 }

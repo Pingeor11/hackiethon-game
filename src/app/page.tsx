@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { NPCName, SuspectName, WorldState, DealFulfilledPayload, ConfirmedTruth } from "@/lib/types";
 
 interface LocalMessage {
-  speaker: "user" | "npc";
+  speaker: "user" | "npc" | "ruby";
   text: string;
 }
 
@@ -199,38 +199,23 @@ const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
   Executive: { x: 20,  y: 105 },
 };
 
-// Map dynamic id → which node it points FROM and TO
 const DYNAMIC_ENDPOINTS: Record<string, { from: string; to: string }> = {
-  manager_controls_coidol:    { from: "Manager",   to: "CoIdol"   },
-  executive_owns_manager:     { from: "Executive", to: "Manager"  },
-  director_indebted_executive:{ from: "Director",  to: "Executive"},
-  executive_surveilled_fan:   { from: "Executive", to: "Fan"      },
-  coidol_ai_rivalry:          { from: "CoIdol",    to: "CoIdol"   }, // self-loop
+  manager_controls_coidol:     { from: "Manager",   to: "CoIdol"   },
+  executive_owns_manager:      { from: "Executive", to: "Manager"  },
+  director_indebted_executive: { from: "Director",  to: "Executive"},
+  executive_surveilled_fan:    { from: "Executive", to: "Fan"      },
+  coidol_ai_rivalry:           { from: "CoIdol",    to: "CoIdol"   },
 };
 
 function RelationshipMap({ dynamics }: { dynamics: any[] }) {
   const W = 260, H = 260;
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      width="100%"
-      style={{ display: "block", marginTop: "6px" }}
-    >
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", marginTop: "6px" }}>
       <defs>
-        {/* Arrow markers at different opacities */}
         {["dim", "mid", "bright"].map(level => (
-          <marker
-            key={level}
-            id={`arrow-${level}`}
-            markerWidth="6" markerHeight="6"
-            refX="5" refY="3"
-            orient="auto"
-          >
-            <path
-              d="M0,0 L0,6 L6,3 z"
-              fill={level === "bright" ? "#f472b6" : level === "mid" ? "#6b3080" : "#2a0a38"}
-            />
+          <marker key={level} id={`arrow-${level}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L6,3 z" fill={level === "bright" ? "#f472b6" : level === "mid" ? "#6b3080" : "#2a0a38"} />
           </marker>
         ))}
       </defs>
@@ -239,17 +224,16 @@ function RelationshipMap({ dynamics }: { dynamics: any[] }) {
       {dynamics.map((d: any) => {
         const ep = DYNAMIC_ENDPOINTS[d.id];
         if (!ep) return null;
-
         const from = NODE_POSITIONS[ep.from];
-        const to = NODE_POSITIONS[ep.to];
+        const to   = NODE_POSITIONS[ep.to];
         if (!from || !to) return null;
 
-        // Self-loop (CoIdol rivalry) — small arc above the node
+        // Self-loop (CoIdol rivalry)
         if (ep.from === ep.to) {
           const cx = from.x;
           const cy = from.y - 22;
           const exposed = d.exposed;
-          const hinted = d.hintsCollected > 0;
+          const hinted  = d.hintsCollected > 0;
           return (
             <g key={d.id}>
               <path
@@ -262,12 +246,8 @@ function RelationshipMap({ dynamics }: { dynamics: any[] }) {
                 opacity={exposed ? 1 : hinted ? 0.6 : 0.3}
               />
               {exposed && (
-                <text
-                  x={cx - 26} y={cy - 4}
-                  fontSize="5" fill="#f472b699"
-                  fontFamily="'Press Start 2P', monospace"
-                  style={{ letterSpacing: "0.02em" }}
-                >
+                <text x={cx - 26} y={cy - 4} fontSize="5" fill="#f472b699"
+                  fontFamily="'Press Start 2P', monospace" style={{ letterSpacing: "0.02em" }}>
                   RIVALRY
                 </text>
               )}
@@ -275,27 +255,22 @@ function RelationshipMap({ dynamics }: { dynamics: any[] }) {
           );
         }
 
-        // Calculate edge endpoints offset from node centre
         const dx = to.x - from.x;
         const dy = to.y - from.y;
         const len = Math.sqrt(dx * dx + dy * dy);
         const nx = dx / len, ny = dy / len;
-        const r = 16; // node radius
+        const r = 16;
         const x1 = from.x + nx * r;
         const y1 = from.y + ny * r;
         const x2 = to.x - nx * (r + 4);
         const y2 = to.y - ny * (r + 4);
-
-        // Slight curve
         const mx = (x1 + x2) / 2 - ny * 18;
         const my = (y1 + y2) / 2 + nx * 18;
-
-        const exposed = d.exposed;
-        const hinted = d.hintsCollected > 0;
-
-        // Midpoint of curve for label
         const lx = 0.25 * x1 + 0.5 * mx + 0.25 * x2;
         const ly = 0.25 * y1 + 0.5 * my + 0.25 * y2;
+
+        const exposed = d.exposed;
+        const hinted  = d.hintsCollected > 0;
 
         return (
           <g key={d.id}>
@@ -308,29 +283,19 @@ function RelationshipMap({ dynamics }: { dynamics: any[] }) {
               markerEnd={`url(#arrow-${exposed ? "bright" : hinted ? "mid" : "dim"})`}
               opacity={exposed ? 1 : hinted ? 0.65 : 0.3}
             />
-            {/* Hint count badge when partially known */}
             {hinted && !exposed && (
-              <text
-                x={lx} y={ly}
-                fontSize="6" fill="#6b3080"
-                fontFamily="monospace" textAnchor="middle"
-              >
+              <text x={lx} y={ly} fontSize="6" fill="#6b3080" fontFamily="monospace" textAnchor="middle">
                 {d.hintsCollected}/{d.hintsNeeded}
               </text>
             )}
-            {/* Exposed label — short keyword */}
             {exposed && (
-              <text
-                x={lx} y={ly - 3}
-                fontSize="5" fill="#f472b699"
-                fontFamily="'Press Start 2P', monospace"
-                textAnchor="middle"
-                style={{ letterSpacing: "0.02em" }}
-              >
-                {d.id === "executive_owns_manager"     ? "OWNS"      :
-                 d.id === "manager_controls_coidol"    ? "CONTROLS"  :
-                 d.id === "director_indebted_executive"? "OWES"      :
-                 d.id === "executive_surveilled_fan"   ? "SURVEILS"  : "↑"}
+              <text x={lx} y={ly - 3} fontSize="5" fill="#f472b699"
+                fontFamily="'Press Start 2P', monospace" textAnchor="middle"
+                style={{ letterSpacing: "0.02em" }}>
+                {d.id === "executive_owns_manager"      ? "OWNS"     :
+                 d.id === "manager_controls_coidol"     ? "CONTROLS" :
+                 d.id === "director_indebted_executive" ? "OWES"     :
+                 d.id === "executive_surveilled_fan"    ? "SURVEILS" : "↑"}
               </text>
             )}
           </g>
@@ -339,49 +304,25 @@ function RelationshipMap({ dynamics }: { dynamics: any[] }) {
 
       {/* ── Nodes ── */}
       {Object.entries(NODE_POSITIONS).map(([name, pos]) => {
-        // Is this node involved in any exposed dynamic?
-        const isActive = dynamics.some(
-          d => d.exposed && (
-            DYNAMIC_ENDPOINTS[d.id]?.from === name ||
-            DYNAMIC_ENDPOINTS[d.id]?.to === name
-          )
-        );
-        const isHinted = !isActive && dynamics.some(
-          d => d.hintsCollected > 0 && (
-            DYNAMIC_ENDPOINTS[d.id]?.from === name ||
-            DYNAMIC_ENDPOINTS[d.id]?.to === name
-          )
-        );
-
+        const isActive = dynamics.some(d => d.exposed && (
+          DYNAMIC_ENDPOINTS[d.id]?.from === name || DYNAMIC_ENDPOINTS[d.id]?.to === name
+        ));
+        const isHinted = !isActive && dynamics.some(d => d.hintsCollected > 0 && (
+          DYNAMIC_ENDPOINTS[d.id]?.from === name || DYNAMIC_ENDPOINTS[d.id]?.to === name
+        ));
         return (
           <g key={name}>
-            {/* Glow ring for active nodes */}
             {isActive && (
-              <circle
-                cx={pos.x} cy={pos.y} r={19}
-                fill="none"
-                stroke="#f472b6"
-                strokeWidth="0.5"
-                opacity="0.3"
-              />
+              <circle cx={pos.x} cy={pos.y} r={19} fill="none" stroke="#f472b6" strokeWidth="0.5" opacity="0.3" />
             )}
-            <circle
-              cx={pos.x} cy={pos.y} r={14}
-              fill="#0e0420"
+            <circle cx={pos.x} cy={pos.y} r={14} fill="#0e0420"
               stroke={isActive ? "#f472b6" : isHinted ? "#6b3080" : "#2a0a38"}
               strokeWidth={isActive ? 1.5 : 1}
             />
-            <text
-              x={pos.x} y={pos.y + 2}
-              fontSize="5"
+            <text x={pos.x} y={pos.y + 2} fontSize="5"
               fill={isActive ? "#f472b6" : isHinted ? "#c084fc" : "#4a1060"}
-              fontFamily="'Press Start 2P', monospace"
-              textAnchor="middle"
-              dominantBaseline="middle"
-            >
-              {name === "CoIdol" ? "CO" :
-               name === "Executive" ? "EXEC" :
-               name.slice(0, 3).toUpperCase()}
+              fontFamily="'Press Start 2P', monospace" textAnchor="middle" dominantBaseline="middle">
+              {name === "CoIdol" ? "CO" : name === "Executive" ? "EXEC" : name.slice(0, 3).toUpperCase()}
             </text>
           </g>
         );
@@ -559,6 +500,19 @@ export default function HomePage() {
 
     // Type the NPC reply first, then trigger cinematic
     await typeNPCMessage(selectedNPC, data.reply);
+
+    // Ruby interjection — appears in chat after NPC finishes, short delay
+    if (data.rubyInterjection && selectedNPC !== "Ruby") {
+      setTimeout(() => {
+        setMessages(prev => ({
+          ...prev,
+          [selectedNPC]: [
+            ...prev[selectedNPC],
+            { speaker: "ruby", text: data.rubyInterjection },
+          ],
+        }));
+      }, 600);
+    }
 
     // Deal reveal cinematic fires after NPC speaks
     if (data.dealFulfilled) {
@@ -914,36 +868,83 @@ export default function HomePage() {
                   : `✦ Ask ${selectedNPC} about their alibi, motive, or relationships.`}
               </p>
             )}
-            {messages[selectedNPC].map((m, i) => (
-              <div key={i} style={{
-                display: "flex", width: "100%",
-                justifyContent: m.speaker === "user" ? "flex-end" : "flex-start",
-                flexShrink: 0,
-              }}>
-                <div style={{ maxWidth: "62%", display: "flex", flexDirection: "column", gap: "2px" }}>
-                  <div style={{
-                    fontFamily: "'Press Start 2P', monospace", fontSize: "6px", letterSpacing: ".04em",
-                    padding: "0 2px", color: m.speaker === "user" ? "#4338ca" : "#6b21a8",
-                    textAlign: m.speaker === "user" ? "right" : "left",
+            {messages[selectedNPC].map((m, i) => {
+              // ── Ruby interjection ──────────────────────────────────────────
+              if (m.speaker === "ruby") {
+                return (
+                  <div key={i} style={{
+                    display: "flex", width: "100%",
+                    justifyContent: "flex-start",
+                    flexShrink: 0,
+                    gap: "6px",
+                    alignItems: "flex-start",
+                    marginTop: "4px",
                   }}>
-                    {m.speaker === "user" ? "YOU" : selectedNPC.toUpperCase()}
+                    {/* Ruby portrait */}
+                    <div style={{
+                      width: "22px", height: "22px", flexShrink: 0,
+                      border: "1px solid #4ade8044", background: "#0a1a0a",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      overflow: "hidden", imageRendering: "pixelated", marginTop: "14px",
+                    }}>
+                      <img src="/sprites/ruby.png" alt="Ruby"
+                        style={{ width: "20px", height: "20px", objectFit: "contain", imageRendering: "pixelated" }}
+                      />
+                    </div>
+                    <div style={{ maxWidth: "72%", display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <div style={{
+                        fontFamily: "'Press Start 2P', monospace", fontSize: "6px",
+                        letterSpacing: ".04em", padding: "0 2px", color: "#4ade80aa",
+                      }}>
+                        RUBY
+                      </div>
+                      <div style={{
+                        fontFamily: "'VT323', monospace", fontSize: "17px", lineHeight: "1.4",
+                        padding: "5px 10px", wordBreak: "break-word", overflowWrap: "anywhere",
+                        background: "#031a08",
+                        border: "1px solid #4ade8033",
+                        color: "#86efac",
+                        borderRadius: "0 6px 6px 6px",
+                      }}>
+                        {m.text}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{
-                    fontFamily: "'VT323', monospace", fontSize: "19px", lineHeight: "1.4",
-                    padding: "6px 10px", wordBreak: "break-word", overflowWrap: "anywhere",
-                    whiteSpace: "pre-wrap",
-                    background: m.speaker === "user" ? "#0c0a30" : "#1c0535",
-                    border: m.speaker === "user" ? "1px solid #312e81" : "1px solid #4a1060",
-                    color: m.speaker === "user" ? "#c7d2fe" : "#f0e8ff",
-                    borderRadius: m.speaker === "user" ? "6px 0 6px 6px" : "0 6px 6px 6px",
-                    textAlign: m.speaker === "user" ? "right" : "left",
-                  }}>
-                    {m.text}
-                    {typingNPC === selectedNPC && i === messages[selectedNPC].length - 1 && m.speaker === "npc" && <span className="cursor">▌</span>}
+                );
+              }
+
+              // ── Normal user / npc message ──────────────────────────────────
+              return (
+                <div key={i} style={{
+                  display: "flex", width: "100%",
+                  justifyContent: m.speaker === "user" ? "flex-end" : "flex-start",
+                  flexShrink: 0,
+                }}>
+                  <div style={{ maxWidth: "62%", display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <div style={{
+                      fontFamily: "'Press Start 2P', monospace", fontSize: "6px", letterSpacing: ".04em",
+                      padding: "0 2px", color: m.speaker === "user" ? "#4338ca" : "#6b21a8",
+                      textAlign: m.speaker === "user" ? "right" : "left",
+                    }}>
+                      {m.speaker === "user" ? "YOU" : selectedNPC.toUpperCase()}
+                    </div>
+                    <div style={{
+                      fontFamily: "'VT323', monospace", fontSize: "19px", lineHeight: "1.4",
+                      padding: "6px 10px", wordBreak: "break-word", overflowWrap: "anywhere",
+                      whiteSpace: "pre-wrap",
+                      background: m.speaker === "user" ? "#0c0a30" : "#1c0535",
+                      border: m.speaker === "user" ? "1px solid #312e81" : "1px solid #4a1060",
+                      color: m.speaker === "user" ? "#c7d2fe" : "#f0e8ff",
+                      borderRadius: m.speaker === "user" ? "6px 0 6px 6px" : "0 6px 6px 6px",
+                      textAlign: m.speaker === "user" ? "right" : "left",
+                    }}>
+                      {m.text}
+                      {typingNPC === selectedNPC && i === messages[selectedNPC].length - 1 && m.speaker === "npc" && <span className="cursor">▌</span>}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="dlg-input-row">
@@ -1351,6 +1352,7 @@ export default function HomePage() {
 
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes bc-slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
         ::-webkit-scrollbar{width:5px;}
         ::-webkit-scrollbar-track{background:#0d0514;}
         ::-webkit-scrollbar-thumb{background:#2a0a38;}
