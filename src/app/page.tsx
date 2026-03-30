@@ -628,54 +628,75 @@ export default function HomePage() {
       setBarterOffer(data.barterOffer);
     }
 
-    // Type the NPC reply first, then trigger cinematic
-    await typeNPCMessage(selectedNPC, data.reply);
+    // ── Loading clears here — movement resumes immediately ───────────────────
+    setLoading(false);
 
-    // Ruby interjection — appears in chat after NPC finishes, short delay
-    if (data.rubyInterjection && selectedNPC !== "Ruby") {
-      setTimeout(() => {
-        setMessages(prev => ({
-          ...prev,
-          [selectedNPC]: [
-            ...prev[selectedNPC],
-            { speaker: "ruby", text: data.rubyInterjection },
-          ],
-        }));
-      }, 600);
-    }
+    // Type the NPC reply — does not block movement
+    await typeNPCMessage(selectedNPC, data.reply);
 
     // Deal reveal cinematic fires after NPC speaks
     if (data.dealFulfilled) {
       setTimeout(() => setDealReveal(data.dealFulfilled), 400);
     }
 
-    // Soft hint — Gate 1 passed but Gate 2 failed, player needs to be more specific
+    // Soft hint — Gate 1 passed but Gate 2 failed
     if (data.dealHint) {
       setDealHint(data.dealHint);
       setTimeout(() => setDealHint(null), 6000);
     }
 
-    // Backchannel toast — fires after reply, feels like intercepted intel
+    // Backchannel toast
     if (data.backchannelDetected && data.updatedWorldState) {
-      // Parse "X contacted Y after this conversation"
       const match = data.backchannelDetected.match(/^(.+?) contacted (.+?) after/);
       if (match) {
         const bcFrom = match[1].trim();
         const bcTo = match[2].trim();
-        // Find the backchannel message from the NPC state
         const targetNPC = data.updatedWorldState.npcs[bcTo];
         const recentRumor = targetNPC?.rumorsHeard?.slice(-1)[0] ?? null;
-        const bcMessage = recentRumor?.includes("told me:") 
+        const bcMessage = recentRumor?.includes("told me:")
           ? recentRumor.split('"')[1] ?? "something about your questions"
           : "something about your questions";
         setTimeout(() => {
           setBackchannelToast({ from: bcFrom, to: bcTo, message: bcMessage });
           setTimeout(() => setBackchannelToast(null), 6000);
-        }, 1200); // slight delay so it feels like it happened after the conversation
+        }, 1200);
       }
     }
 
-    setLoading(false);
+    // ── Ruby interjection — fully non-blocking, fires after loading clears ────
+    // Player can move and act immediately. Ruby appears if she has something.
+    const npcForRuby = selectedNPC;
+    if (npcForRuby !== "Ruby" && data.updatedWorldState) {
+      fetch("/api/ruby", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          npcName: npcForRuby,
+          playerMessage: msg,
+          npcReply: data.reply,
+          worldState: data.updatedWorldState,
+        }),
+      })
+        .then(r => r.json())
+        .then(rubyData => {
+          if (rubyData?.interject && rubyData.message) {
+            setMessages(prev => ({
+              ...prev,
+              [npcForRuby]: [
+                ...prev[npcForRuby],
+                { speaker: "ruby", text: rubyData.message },
+              ],
+            }));
+            if (rubyData.flaggedFact) {
+              setWorldState(prev => prev ? {
+                ...prev,
+                rubyFlagged: [...(prev.rubyFlagged ?? []), rubyData.flaggedFact],
+              } : prev);
+            }
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   async function askRubyForHelp() {
@@ -1380,7 +1401,7 @@ export default function HomePage() {
         /* HUD */
         .hud { flex:0 0 38px; height:38px; display:flex; justify-content:space-between; align-items:center; padding:0 14px; background:#0d0514; border-bottom:2px solid #4a1060; gap:10px; overflow:hidden; z-index:10; }
         .hud-left,.hud-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-        .hud-logo { font-family:'Press Start 2P',monospace; font-size:9px; color:#f472b6; letter-spacing:0.2em; text-shadow:0 0 12px #f472b677; }
+        .hud-logo { font-family:'Press Start 2P',monospace; font-size:9px; color:#f472b6; letter-spacing:0.2em; text-shadow:0 0 3px #f472b677; }
         .hud-logo span { color:#e879f9; }
         .hud-sep { width:1px; height:18px; background:#3a1050; }
         .chip { font-family:'Press Start 2P',monospace; font-size:7px; padding:3px 7px; border:1px solid #3a1050; background:#180a22; color:#c084fc; letter-spacing:0.05em; white-space:nowrap; }
@@ -1393,7 +1414,12 @@ export default function HomePage() {
         .chip.deal-chip { color:#f472b6; border-color:#f472b644; background:#1c0535; animation:pulse-deal 2s ease-in-out infinite; }
         @keyframes pulse-deal { 0%,100%{border-color:#f472b644}50%{border-color:#f472b6aa} }
         .key-hint { display:flex; align-items:center; gap:4px; }
-        .hud-right span { font-size:13px; color:#5a2870; }
+       .hud-right span {
+  font-size: 13px;
+  color: #f472b6;      /* brighter color */
+  opacity: 1;          /* remove any fade */
+  text-shadow: none;   /* remove glow blur */
+}
         kbd { font-family:'Press Start 2P',monospace; font-size:6px; padding:2px 5px; border:1px solid #3a1050; background:#180a22; color:#e879f9; }
 
         /* Scene */
@@ -1422,15 +1448,15 @@ export default function HomePage() {
         @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 
         /* Notebook */
-        .notebook { position:fixed; top:38px; right:0; bottom:0; width:300px; background:rgba(12,4,20,0.98); border-left:2px solid #4a1060; z-index:60; display:flex; flex-direction:column; overflow:hidden; }
-        .nb-head { display:flex; justify-content:space-between; align-items:center; padding:7px 12px; border-bottom:1px solid #2a0a38; font-family:'Press Start 2P',monospace; font-size:8px; color:#f472b6; background:#110420; flex-shrink:0; }
-        .icon-btn { background:none; border:none; cursor:pointer; font-family:'VT323',monospace; font-size:18px; color:#7e4a9a; padding:0 4px; transition:color .1s; }
+        .notebook { position:fixed; top:38px; right:0; bottom:0; width:300px; background:rgba(18,6,32,0.99); border-left:2px solid #7c3aed; z-index:60; display:flex; flex-direction:column; overflow:hidden; }
+        .nb-head { display:flex; justify-content:space-between; align-items:center; padding:7px 12px; border-bottom:1px solid #4a1060; font-family:'Press Start 2P',monospace; font-size:8px; color:#f472b6; background:#1e0838; flex-shrink:0; }
+        .icon-btn { background:none; border:none; cursor:pointer; font-family:'VT323',monospace; font-size:18px; color:#a855f7; padding:0 4px; transition:color .1s; }
         .icon-btn:hover { color:#f472b6; }
         .nb-body { overflow-y:auto; flex:1; padding:12px 14px; scrollbar-width:thin; scrollbar-color:#2a0a38 #0d0514; }
         .nb-section { margin-bottom:12px; }
-        .nb-section h4 { font-family:'Press Start 2P',monospace; font-size:7px; color:#e879f9; letter-spacing:.1em; margin-bottom:8px; }
-        .nb-hr { height:1px; background:#220838; margin:10px 0; }
-        .nb-empty { font-size:14px; color:#3a1050; font-style:italic; }
+        .nb-section h4 { font-family:'Press Start 2P',monospace; font-size:7px; color:#e879f9; letter-spacing:.1em; margin-bottom:8px; text-shadow:0 0 8px #e879f944; }
+        .nb-hr { height:1px; background:#3a1060; margin:10px 0; }
+        .nb-empty { font-size:14px; color:#4a1870; font-style:italic; }
 
         /* Deal entries in notebook */
         .nb-deal { margin-bottom:10px; padding:8px 10px; border:1px solid; }
