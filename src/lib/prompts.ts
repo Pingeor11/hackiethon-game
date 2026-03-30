@@ -166,8 +166,8 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
   const tension = world.tension ?? 0;
   const tensionHigh = tension >= 7;
 
-  const recentMemories = npc.memories.slice(-10);       // was -6
-  const recentRumours = npc.rumorsHeard.slice(-6);       // was -4
+  const recentMemories = npc.memories.slice(-8);       // was -6
+  const recentRumours = npc.rumorsHeard.slice(-4);       // was -4
   const beliefsText = Object.entries(npc.beliefs ?? {})
     .map(([k, v]) => `${k}: ${v}`)
     .join("\n");

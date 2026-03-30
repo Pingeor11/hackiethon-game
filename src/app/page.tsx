@@ -13,7 +13,7 @@ type Facing = "left" | "right";
 const SCENE_WIDTH = 1056;
 const SCENE_HEIGHT = 584;
 const PLAYER_SIZE = 54;
-const MOVE_SPEED = 8;
+const MOVE_SPEED = 5;
 const TALK_DISTANCE = 90;
 
 const WALK_MIN_X = 100;
