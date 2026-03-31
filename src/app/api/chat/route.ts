@@ -219,9 +219,18 @@ export async function POST(req: NextRequest) {
     let replyPrompt: string;
     if (fulfilledDeal) {
       const truthToReveal = (body.worldState.npcs[fulfilledDeal.npcName].truthsKnown ?? [])[fulfilledDeal.truthIndex];
-      dealRevealTruth = truthToReveal ?? null;
-
       const isKillerDeal = fulfilledDeal.npcName === body.worldState.killer;
+
+      // For innocent NPCs — show their belief about the killer in the cinematic
+      // rather than their personal secret, since beliefs are directional investigation hints.
+      // For killer NPCs — use their truthsKnown entry as usual.
+      if (!isKillerDeal) {
+        const killerBelief = (body.worldState.npcs[fulfilledDeal.npcName].beliefs ?? {})[body.worldState.killer];
+        dealRevealTruth = killerBelief ?? truthToReveal ?? null;
+      } else {
+        dealRevealTruth = truthToReveal ?? null;
+      }
+
       replyPrompt = buildDealRevealPrompt(
         npc,
         body.worldState,
@@ -256,18 +265,14 @@ export async function POST(req: NextRequest) {
     // Ruby only interjects when talking to non-Ruby NPCs
     const shouldCheckRuby = body.npcName !== "Ruby" && !fulfilledDeal;
 
-    const [extraction, rubyInterjectionResult] = await Promise.all([
-      callGroqJson<ExtractionResult>(
-        buildExtractionPrompt(npc, body.playerMessage, reply, body.worldState),
-        fallbackExtraction,
-      ),
-      shouldCheckRuby
-        ? callGroqJson<{ interject: boolean; message: string | null; flaggedFact: string | null }>(
-            buildRubyInterjectionPrompt(body.npcName, body.playerMessage, reply, body.worldState),
-            { interject: false, message: null, flaggedFact: null },
-          )
-        : Promise.resolve({ interject: false, message: null, flaggedFact: null }),
-    ]);
+    // ── Extraction only — Ruby runs client-side after response returns ────────
+    const extraction = await callGroqJson<ExtractionResult>(
+      buildExtractionPrompt(npc, body.playerMessage, reply, body.worldState),
+      fallbackExtraction,
+    );
+
+    // Placeholder — Ruby interjection is now handled by /api/ruby endpoint
+    const rubyInterjectionResult = { interject: false, message: null, flaggedFact: null };
 
     if (fulfilledDeal && dealRevealTruth) {
       extraction.discoveredClue = `[DEAL CONFIRMED] ${fulfilledDeal.npcName}: ${dealRevealTruth}`;
@@ -370,12 +375,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── STORE RUBY FLAGGED FACT ───────────────────────────────────────────────
-    if (rubyInterjectionResult?.interject && rubyInterjectionResult.flaggedFact) {
-      if (!updatedWorldState.rubyFlagged) updatedWorldState.rubyFlagged = [];
-      updatedWorldState.rubyFlagged.push(rubyInterjectionResult.flaggedFact);
-    }
-
     return NextResponse.json({
       reply,
       updatedWorldState,
@@ -394,9 +393,6 @@ export async function POST(req: NextRequest) {
         : null,
       dealHint: !fulfilledDeal && gate2FailReason && pendingDealsForNPC.length > 0
         ? gate2FailReason
-        : null,
-      rubyInterjection: rubyInterjectionResult?.interject
-        ? rubyInterjectionResult.message
         : null,
     });
 

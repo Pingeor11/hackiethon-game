@@ -13,6 +13,7 @@ export type AquaMood = "cold" | "grieving" | "focused" | "angry" | "desperate";
 
 export interface NPCState {
   name: NPCName;
+  pronouns: string;
   role: string;
   personality: string;
   publicFace: string;

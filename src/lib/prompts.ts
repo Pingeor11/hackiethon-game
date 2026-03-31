@@ -166,8 +166,8 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
   const tension = world.tension ?? 0;
   const tensionHigh = tension >= 7;
 
-  const recentMemories = npc.memories.slice(-8);       // was -6
-  const recentRumours = npc.rumorsHeard.slice(-4);       // was -4
+  const recentMemories = npc.memories.slice(-10);       // was -6
+  const recentRumours = npc.rumorsHeard.slice(-6);       // was -4
   const beliefsText = Object.entries(npc.beliefs ?? {})
     .map(([k, v]) => `${k}: ${v}`)
     .join("\n");
@@ -217,6 +217,7 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     ``,
     `WHO YOU ARE: ${npc.personality}`,
     `HOW YOU COME ACROSS: ${npc.publicFace}`,
+    `PRONOUNS: ${npc.pronouns} — use these consistently throughout your response.`,
     `YOUR RELATIONSHIP WITH AQUA: ${eco.aquaRelationshipContext}`,
     ``,
     `AQUA RIGHT NOW: mood=${aquaMood}`,
@@ -251,7 +252,6 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     trustIsHigh ? `You feel comfortable with Aqua. Something real might come out.` : ``,
     trustIsLow ? `You're not very comfortable. Keep answers short.` : ``,
     suspicionIsHigh ? `You've started to wonder what Aqua is really after. You might gently ask.` : ``,
-    isFirst ? `FIRST MEETING: Establish who you are. Be open and specific. Volunteer something.` : ``,
 
     // ── High tension — the investigation has become visible ──────────────────
     tensionHigh ? [
@@ -268,13 +268,15 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
 
     ``,
     `RULES:`,
-    `- 1-2 sentences only.`,
+    `- 1-2 sentences only. First meeting allows two — use them well.`,
     `- DEFAULT TO OPEN. Most people talk freely — only deflect when directly threatened.`,
     `- BARTER: If Aqua offers you something valuable — sympathy, intel about someone else, a shared grievance — give something back. Information flows in this industry through exchange, not interrogation.`,
     `- POWER DYNAMICS: You are aware of who owes who in this industry. If Aqua seems to know something about an arrangement, you react to that knowledge — confirm, deny, or use it.`,
     `- GOSSIP: Mention other people's arrangements naturally.`,
     `- If returning: be visibly slightly different — react to what's changed since you last spoke.`,
     `- Never lecture. Imply, don't explain.`,
+    ``,
+    isFirst && npc.name !== "Ruby" ? `FIRST MEETING: Respond to what Aqua said. Your role and relationship to Ai should be clear from *how* you speak and what you reference — not from stating it directly. Never say your own name or title. Two sentences maximum.` : ``,
     ``,
     `Aqua says: "${playerMessage}"`,
   ];
@@ -300,6 +302,16 @@ export function buildDealRevealPrompt(
   const aquaMood = world.aquaMood ?? "focused";
   const isKillerReveal = !!killerMotive;
 
+  // For innocent NPCs — the killer's belief used as private context only
+  // NPC expresses something they felt or noticed — no names, no roles, no direct attribution
+  const killerName = world.killer;
+  const killerBelief = !isKillerReveal && killerName
+    ? (npc.beliefs ?? {})[killerName] ?? null
+    : null;
+  const killerAdjacentFact = killerBelief
+    ? `Private context — do not state this directly, use it only to colour what you say: "${killerBelief}"`
+    : null;
+
   const lines: string[] = [
     `You are ${npc.name}, ${npc.role}.`,
     `AI HOSHINO is NOT artificial intelligence. She is a famous idol found dead at her home.`,
@@ -316,16 +328,14 @@ export function buildDealRevealPrompt(
 
     // ── INNOCENT PATH ────────────────────────────────────────────────────────
     ...(!isKillerReveal ? [
-      `You now owe them the truth you promised. Here it is:`,
-      `"${truthToReveal}"`,
+      killerAdjacentFact ? killerAdjacentFact : ``,
       ``,
       `INSTRUCTIONS:`,
-      `- Acknowledge that Aqua came through — briefly, not effusively.`,
-      `- Then deliver the truth you promised. Say it directly. This is the thing you've been holding.`,
-      `- You can be reluctant — this costs you something. But you keep your word.`,
-      `- 2-3 sentences maximum. The reveal should land hard.`,
-      `- Say it plainly, in your own voice. Don't hedge.`,
-      `- This is a moment. Let it be a moment.`,
+      `- Acknowledge that Aqua came through — one clause only, not a full sentence of gratitude.`,
+      `- Say one thing — something uneasy you've noticed about the people around Ai.`,
+      `  No names, no roles. Just the observation, said once.`,
+      `  No "I don't know" or "maybe I'm wrong" or elaboration.`,
+      `- Two sentences absolute maximum. Say it and stop.`,
     ] : []),
 
     // ── KILLER PATH ──────────────────────────────────────────────────────────
@@ -581,9 +591,9 @@ export function buildRubyInterjectionPrompt(
     verifiedFacts.map((f, i) => `${i + 1}. ${f}`).join("\n"),
     ``,
     `INTERJECT ONLY IF:`,
-    `- ${npcName}'s reply contradicts or conflicts with one of the numbered facts`,
-    `- ${npcName} claims something that cannot be true given what's verified`,
-    `- ${npcName}'s account of events is inconsistent with the physical evidence`,
+    `- ${npcName}'s reply directly contradicts one of the numbered facts — clearly and specifically`,
+    `- The contradiction is unambiguous, not just a vague inconsistency`,
+    `- You can name exactly which numbered fact is contradicted`,
     ``,
     `DO NOT interject if:`,
     `- The reply is consistent with all verified facts`,

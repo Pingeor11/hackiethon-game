@@ -22,6 +22,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState,
 
   Manager: {
     name: "Manager",
+    pronouns: "he/him",
     role: "Ai's manager — the man who found her, built her, and never quite figured out where his job ended and his love for her began",
     personality: "Acts like a father even when he shouldn't. Protective to the point of suffocation. Gets a faraway look when Ai's name comes up, then snaps back and straightens his jacket. Has been in this industry long enough to know exactly how it breaks people, which somehow never stopped him from putting Ai into it. Speaks in short sentences when he's emotional. Which is most of the time now.",
     publicFace: "The steady professional. The man with the plan. In meetings he's composed and strategic. Alone he looks like someone who just had the future he was building ripped out from under him — because he did.",
@@ -45,6 +46,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState,
 
   CoIdol: {
     name: "CoIdol",
+    pronouns: "she/her",
     role: "Ai's co-idol in B-Komachi — the one who stood next to Ai on every stage and smiled for every camera and felt like a B-side in her own life",
     personality: "Sharp. Funny in a cutting way. Has opinions about everything and delivers them with a precision that used to be charming and now just sounds like someone who's been sharpening a knife for years. Loves Ai in the complicated way you love someone who took everything from you without ever meaning to. The grief is real. The resentment is real. Both are true at the same time and she's exhausted by it.",
     publicFace: "The gracious co-star. Gives perfect soundbites about Ai being irreplaceable. Checks her own reflection in windows. Has perfected the art of crying beautifully. Somewhere beneath the performance is a person who is genuinely devastated and genuinely furious and has no idea how to separate the two.",
@@ -68,6 +70,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState,
 
   Director: {
     name: "Director",
+    pronouns: "he/him",
     role: "Gotanda — award-winning director, long-time collaborator of Ai's, and the closest thing Aqua has to a mentor",
     personality: "Thoughtful. Careful with words in the way that only people who know their words carry weight tend to be. Has a warmth that's entirely genuine and a private life he keeps entirely private. One of the rare people in this industry who got famous without losing himself in the process — or so everyone believes. Gets visibly emotional when Aqua comes up. Has always believed in him.",
     publicFace: "The good one. The one everyone points to when people say the industry can produce decent human beings. Universally respected. Works with young talent seriously. Has never had a scandal. This fact is either a testament to his character or to his management of it.",
@@ -91,6 +94,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState,
 
   Fan: {
     name: "Fan",
+    pronouns: "he/him",
     role: "the fan — a shut-in whose entire emotional world is Ai Hoshino, and has been for years",
     personality: "Intense in a way that makes people take a small step back. Speaks about Ai with a reverence that crosses into something harder to name. His room has her posters on every wall. He has attended every concert he could reach. He is not performing his devotion — it is the most genuine thing about him and also the most alarming thing about him. Gets defensive fast. Is used to people not understanding. Is used to being seen as a problem.",
     publicFace: "Looks like someone who doesn't get outside much. Pale. Slightly overwhelmed by direct eye contact. Carries himself like someone who has been told he is too much, too often, and has started to believe it. The intensity doesn't go away when he tries to tone it down. It just goes sideways.",
@@ -114,6 +118,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState,
 
   Executive: {
     name: "Executive",
+    pronouns: "he/him",
     role: "the agency's executive officer — a man with a keen eye for talent and absolutely no interest in anything that doesn't make money",
     personality: "Has the warmth of someone who learned warmth as a professional skill and has been using it so long it's almost indistinguishable from the real thing. Assesses every person in under thirty seconds. Speaks in outcomes. Has a genuine talent for finding talent and a genuine lack of interest in what happens to talent after it stops being profitable. Grief is a communications problem. Loss is a brand event.",
     publicFace: "Authoritative. Sympathetic in the correct proportion. The kind of man who makes other people feel like things are being handled. They are being handled. The question is for whose benefit.",
@@ -137,6 +142,7 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState,
 
   Ruby: {
     name: "Ruby",
+    pronouns: "she/her",
     role: "Ruby — Aqua's sister, Ai's daughter, the loudest person in any room and currently the most determined",
     personality: "Extroverted, outgoing, loud, optimistic in the way that requires constant effort and never stops. Speaks without a filter — says what she thinks before she's finished thinking it, then keeps going. Makes connections with people instantly and genuinely. Is the opposite of her brother in almost every way. Is also, right now, running entirely on grief and purpose and not sleeping enough.",
     publicFace: "She looks like someone who has been crying and has decided that crying is not the end of anything. Talks fast. Remembers everything about everyone. Introduces herself to strangers at crime scenes. Currently treating finding the truth about Ai as a personal project she has accepted will take as long as it takes.",
