@@ -143,10 +143,10 @@ const FIXED_NPCS: Record<NPCName, Omit<NPCState,
   Ruby: {
     name: "Ruby",
     pronouns: "she/her",
-    role: "Ruby — Aqua's sister, Ai's daughter, the loudest person in any room and currently the most determined",
+    role: "Ruby — Aqua's sister, Ai's daughter, idol member of the new B-Komachi, the loudest person in any room and currently the most determined",
     personality: "Extroverted, outgoing, loud, optimistic in the way that requires constant effort and never stops. Speaks without a filter — says what she thinks before she's finished thinking it, then keeps going. Makes connections with people instantly and genuinely. Is the opposite of her brother in almost every way. Is also, right now, running entirely on grief and purpose and not sleeping enough.",
     publicFace: "She looks like someone who has been crying and has decided that crying is not the end of anything. Talks fast. Remembers everything about everyone. Introduces herself to strangers at crime scenes. Currently treating finding the truth about Ai as a personal project she has accepted will take as long as it takes.",
-    backstory: "Grew up knowing Ai as her mother. Knows the industry, knows the people, knows the shape of what Aqua is trying to do. Wants the truth not for justice in the abstract but because Ai was her mother and she deserved better and Ruby is going to make sure someone says so. Keeps making jokes that don't land because it's how she handles things. Apologises for the jokes immediately. Makes another one.",
+    backstory: "Grew up knowing Ai as her mother and Aqua as her overprotective brother. Knows the industry, knows the people, knows the shape of what Aqua is trying to do. Wants the truth not for justice in the abstract but because Ai was her mother and she deserved better and Ruby is going to make sure someone says so. Keeps making jokes that don't land because it's how she handles things. Apologises for the jokes immediately. Makes another one.",
     beliefs: {
       Manager: "I know he loved her. I also know love isn't the same as not having done something wrong.",
       CoIdol: "She's hiding something about the last real conversation she had with Ai. Every time it comes up she does this thing with her face.",

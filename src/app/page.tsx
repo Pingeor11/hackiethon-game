@@ -475,6 +475,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [typingNPC, setTypingNPC] = useState<NPCName | null>(null);
   const [notebookOpen, setNotebookOpen] = useState(false);
+  useEffect(() => { notebookOpenRef.current = notebookOpen; }, [notebookOpen]);
   const [elicitationToast, setElicitationToast] = useState<string | null>(null);
   const [barterOffer, setBarterOffer] = useState<{
     npcName: string; offer: string; asking: string;
@@ -500,6 +501,46 @@ export default function HomePage() {
   const rafRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const chatLogRef = useRef<HTMLDivElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [musicMuted, setMusicMuted] = useState(false);
+  const sfxRefs = useRef<Record<string, HTMLAudioElement>>({});
+  const notebookOpenRef = useRef(false);
+
+  function playSound(name: string) {
+    const audio = sfxRefs.current[name];
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  }
+
+  // Start music after first user interaction (browser autoplay policy)
+  useEffect(() => {
+    const tryPlay = () => {
+      if (audioRef.current && audioRef.current.paused) {
+        audioRef.current.volume = 0.35;
+        audioRef.current.play().catch(() => {});
+      }
+      window.removeEventListener("click", tryPlay);
+      window.removeEventListener("keydown", tryPlay);
+    };
+    window.addEventListener("click", tryPlay);
+    window.addEventListener("keydown", tryPlay);
+    return () => {
+      window.removeEventListener("click", tryPlay);
+      window.removeEventListener("keydown", tryPlay);
+    };
+  }, []);
+
+  // Mute/unmute
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.muted = musicMuted;
+  }, [musicMuted]);
+
+  // Lower volume during confrontation, restore after
+  useEffect(() => {
+    if (!audioRef.current) return;
+    audioRef.current.volume = confrontation ? 0.08 : 0.35;
+  }, [confrontation]);
 
   useEffect(() => {
     fetch("/api/game").then((r) => r.json()).then(data => {
@@ -562,7 +603,11 @@ export default function HomePage() {
         if (nearbyNPC && !selectedNPC) { setSelectedNPC(nearbyNPC); setTimeout(() => inputRef.current?.focus(), 0); }
         return;
       }
-      if (e.key === "n" || e.key === "N") { setNotebookOpen(v => !v); return; }
+      if (e.key === "n" || e.key === "N") {
+        if (!notebookOpenRef.current) playSound("page");
+        setNotebookOpen(v => !v);
+        return;
+      }
       if (e.key === "Escape") { setSelectedNPC(null); setNotebookOpen(false); return; }
       pressedKeys.current.add(e.key);
     }
@@ -609,6 +654,7 @@ export default function HomePage() {
 
   async function sendMessage() {
     if (!worldState || !selectedNPC || !input.trim() || loading || worldState.gameOver) return;
+    playSound("message");
     const msg = input.trim(); setInput(""); setLoading(true);
     setMessages(prev => ({ ...prev, [selectedNPC]: [...prev[selectedNPC], { speaker: "user", text: msg }] }));
 
@@ -625,6 +671,7 @@ export default function HomePage() {
       setTimeout(() => setElicitationToast(null), 5000);
     }
     if (data.barterOffer) {
+      playSound("chime");
       setBarterOffer(data.barterOffer);
     }
 
@@ -636,6 +683,7 @@ export default function HomePage() {
 
     // Deal reveal cinematic fires after NPC speaks
     if (data.dealFulfilled) {
+      playSound("chime");
       setTimeout(() => setDealReveal(data.dealFulfilled), 400);
     }
 
@@ -663,39 +711,25 @@ export default function HomePage() {
       }
     }
 
-    // ── Ruby interjection — fully non-blocking, fires after loading clears ────
-    // Player can move and act immediately. Ruby appears if she has something.
-    const npcForRuby = selectedNPC;
-    if (npcForRuby !== "Ruby" && data.updatedWorldState) {
-      fetch("/api/ruby", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          npcName: npcForRuby,
-          playerMessage: msg,
-          npcReply: data.reply,
-          worldState: data.updatedWorldState,
-        }),
-      })
-        .then(r => r.json())
-        .then(rubyData => {
-          if (rubyData?.interject && rubyData.message) {
-            setMessages(prev => ({
-              ...prev,
-              [npcForRuby]: [
-                ...prev[npcForRuby],
-                { speaker: "ruby", text: rubyData.message },
-              ],
-            }));
-            if (rubyData.flaggedFact) {
-              setWorldState(prev => prev ? {
-                ...prev,
-                rubyFlagged: [...(prev.rubyFlagged ?? []), rubyData.flaggedFact],
-              } : prev);
-            }
-          }
-        })
-        .catch(() => {});
+    // ── Ruby interjection — from main response, fires after NPC reply ────────
+    if (data.rubyInterjection && selectedNPC !== "Ruby") {
+      const npcForRuby = selectedNPC;
+      setTimeout(() => {
+        setMessages(prev => ({
+          ...prev,
+          [npcForRuby]: [
+            ...prev[npcForRuby],
+            { speaker: "ruby", text: data.rubyInterjection },
+          ],
+        }));
+        playSound("ruby");
+        if (data.rubyFlaggedFact) {
+          setWorldState(prev => prev ? {
+            ...prev,
+            rubyFlagged: [...(prev.rubyFlagged ?? []), data.rubyFlaggedFact],
+          } : prev);
+        }
+      }, 600);
     }
   }
 
@@ -725,6 +759,7 @@ export default function HomePage() {
     setLoading(false);
     // Trigger confrontation cinematic — world state update happens after it resolves
     if (data.confrontationReply) {
+      playSound("piano");
       setConfrontation({
         npcName,
         reply: data.confrontationReply,
@@ -774,7 +809,7 @@ export default function HomePage() {
           ))}
           <div style={{ width:"60px", height:"1px", background:"#f472b644", margin:"4px auto", animation:"fadeInUp 0.8s ease forwards", animationDelay:"2.4s", opacity:0 }} />
           <div style={{ fontSize:"9px", color:"#e879f9", letterSpacing:"0.14em", lineHeight:"2", animation:"fadeInUp 0.8s ease forwards", animationDelay:"2.8s", opacity:0 }}>YOU ARE AI'S SON — AQUA HOSHINO.</div>
-          <div style={{ fontSize:"11px", color:"#f472b6", letterSpacing:"0.2em", animation:"fadeInUp 0.8s ease forwards, pulse-glow 2s ease-in-out infinite", animationDelay:"3.4s", opacity:0, textShadow:"0 0 20px #f472b6aa" }}>FIND OUT AND KILL WHO DID IT.</div>
+          <div style={{ fontSize:"11px", color:"#f472b6", letterSpacing:"0.2em", animation:"fadeInUp 0.8s ease forwards, pulse-glow 2s ease-in-out infinite", animationDelay:"3.4s", opacity:0, textShadow:"0 0 20px #f472b6aa" }}>FIND OUT WHO DID IT.</div>
         </div>
         <div style={{ fontSize:"6px", color:"#3a1050", letterSpacing:"0.14em", animation:"blink 1.2s step-end infinite, fadeInUp 0.8s ease forwards", animationDelay:"4s", opacity:0 }}>CLICK ANYWHERE TO BEGIN</div>
       </div>
@@ -802,6 +837,16 @@ export default function HomePage() {
       <div className="scanlines" aria-hidden />
       <div className="vignette" aria-hidden />
 
+      {/* ── Background music ── */}
+      <audio ref={audioRef} src="/audio/idolmusic.mp3" loop preload="auto" style={{ display: "none" }} />
+
+      {/* ── Sound effects ── */}
+      <audio ref={el => { if (el) sfxRefs.current["chime"] = el; }} src="/audio/chimesound.mp3" preload="auto" style={{ display: "none" }} />
+      <audio ref={el => { if (el) sfxRefs.current["ruby"] = el; }} src="/audio/rubysound.mp3" preload="auto" style={{ display: "none" }} />
+      <audio ref={el => { if (el) sfxRefs.current["message"] = el; }} src="/audio/messagesound.mp3" preload="auto" style={{ display: "none" }} />
+      <audio ref={el => { if (el) sfxRefs.current["piano"] = el; }} src="/audio/pianosound.mp3" preload="auto" style={{ display: "none" }} />
+      <audio ref={el => { if (el) sfxRefs.current["knife"] = el; }} src="/audio/knifesound.mp3" preload="auto" style={{ display: "none" }} />
+
       {/* ── Confrontation Cinematic ── */}
       {confrontation && (
         <ConfrontationCinematic
@@ -809,6 +854,9 @@ export default function HomePage() {
           reply={confrontation.reply}
           isCorrect={confrontation.isCorrect}
           onComplete={() => {
+            playSound("knife");
+            const piano = sfxRefs.current["piano"];
+            if (piano) { piano.pause(); piano.currentTime = 0; }
             setWorldState(confrontation.updatedWorldState);
             setConfrontation(null);
           }}
@@ -846,6 +894,18 @@ export default function HomePage() {
           <div className="key-hint"><kbd>E</kbd><span>talk</span></div>
           <div className="key-hint"><kbd>N</kbd><span>notes</span></div>
           <div className="key-hint"><kbd>ESC</kbd><span>back</span></div>
+          <button
+            onClick={() => setMusicMuted(v => !v)}
+            style={{
+              fontFamily: "'Press Start 2P', monospace", fontSize: "7px",
+              background: "none", border: "1px solid #3a1050",
+              color: musicMuted ? "#3a1050" : "#c084fc",
+              padding: "2px 7px", cursor: "pointer", letterSpacing: "0.04em",
+            }}
+            title={musicMuted ? "Unmute music" : "Mute music"}
+          >
+            {musicMuted ? "♪ OFF" : "♪ ON"}
+          </button>
         </div>
       </header>
 
@@ -1401,7 +1461,7 @@ export default function HomePage() {
         /* HUD */
         .hud { flex:0 0 38px; height:38px; display:flex; justify-content:space-between; align-items:center; padding:0 14px; background:#0d0514; border-bottom:2px solid #4a1060; gap:10px; overflow:hidden; z-index:10; }
         .hud-left,.hud-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-        .hud-logo { font-family:'Press Start 2P',monospace; font-size:9px; color:#f472b6; letter-spacing:0.2em; text-shadow:0 0 3px #f472b677; }
+        .hud-logo { font-family:'Press Start 2P',monospace; font-size:9px; color:#f472b6; letter-spacing:0.2em; text-shadow:0 0 12px #f472b677; }
         .hud-logo span { color:#e879f9; }
         .hud-sep { width:1px; height:18px; background:#3a1050; }
         .chip { font-family:'Press Start 2P',monospace; font-size:7px; padding:3px 7px; border:1px solid #3a1050; background:#180a22; color:#c084fc; letter-spacing:0.05em; white-space:nowrap; }
@@ -1414,12 +1474,7 @@ export default function HomePage() {
         .chip.deal-chip { color:#f472b6; border-color:#f472b644; background:#1c0535; animation:pulse-deal 2s ease-in-out infinite; }
         @keyframes pulse-deal { 0%,100%{border-color:#f472b644}50%{border-color:#f472b6aa} }
         .key-hint { display:flex; align-items:center; gap:4px; }
-       .hud-right span {
-  font-size: 13px;
-  color: #f472b6;      /* brighter color */
-  opacity: 1;          /* remove any fade */
-  text-shadow: none;   /* remove glow blur */
-}
+        .hud-right span { font-size:13px; color:#5a2870; }
         kbd { font-family:'Press Start 2P',monospace; font-size:6px; padding:2px 5px; border:1px solid #3a1050; background:#180a22; color:#e879f9; }
 
         /* Scene */

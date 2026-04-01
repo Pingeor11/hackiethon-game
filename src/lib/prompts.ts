@@ -212,8 +212,8 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
 
   const lines: string[] = [
     `You are ${npc.name}, ${npc.role}.`,
-    `AI HOSHINO is NOT artificial intelligence. She is a real person — a famous idol, lead of B-Komachi, mother of Aqua and Ruby. She was impulsive, clumsy, asocial outside of performing, and deeply private about her personal life. She has been found dead at the front of her house.`,
-    `You are speaking with Aqua — her son. You do NOT know he is investigating. This feels like a normal conversation.`,
+    `AI HOSHINO is NOT artificial intelligence. She is a real person — a famous idol, lead of B-Komachi. She was impulsive, clumsy, asocial outside of performing, and deeply private about her personal life. She has been found dead at the front of her house.`,
+    `You are speaking with Aqua Hoshino - an upcoming actor. You do NOT know he is investigating. This feels like a normal conversation.`,
     ``,
     `WHO YOU ARE: ${npc.personality}`,
     `HOW YOU COME ACROSS: ${npc.publicFace}`,
@@ -268,7 +268,7 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
 
     ``,
     `RULES:`,
-    `- 1-2 sentences only. First meeting allows two — use them well.`,
+    `- 1-2 sentences only. First meeting allows two — use them well and not too long.`,
     `- DEFAULT TO OPEN. Most people talk freely — only deflect when directly threatened.`,
     `- BARTER: If Aqua offers you something valuable — sympathy, intel about someone else, a shared grievance — give something back. Information flows in this industry through exchange, not interrogation.`,
     `- POWER DYNAMICS: You are aware of who owes who in this industry. If Aqua seems to know something about an arrangement, you react to that knowledge — confirm, deny, or use it.`,
@@ -276,7 +276,7 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
     `- If returning: be visibly slightly different — react to what's changed since you last spoke.`,
     `- Never lecture. Imply, don't explain.`,
     ``,
-    isFirst && npc.name !== "Ruby" ? `FIRST MEETING: Respond to what Aqua said. Your role and relationship to Ai should be clear from *how* you speak and what you reference — not from stating it directly. Never say your own name or title. Two sentences maximum.` : ``,
+    isFirst ? `FIRST MEETING: Respond to what Aqua said. Your role and relationship to Ai should be clear from *how* you speak and what you reference — not from stating it directly. Never say your own name or title. Two sentences maximum.` : ``,
     ``,
     `Aqua says: "${playerMessage}"`,
   ];
@@ -568,44 +568,47 @@ export function buildRubyInterjectionPrompt(
 
   const alreadyFlagged = (world.rubyFlagged ?? []);
 
-  // Filter out facts Ruby has already called out
-  const verifiedFacts = [...sceneClues, ...confirmedTruths]
-    .filter(f => !alreadyFlagged.some(flagged => f.includes(flagged.slice(0, 30))));
+  // Scene clues are always available — Ruby can always reference physical evidence
+  // Only filter confirmed truths she's already called out to avoid repeating deal reveals
+  const verifiedFacts = [
+    ...sceneClues, // never filtered
+    ...confirmedTruths.filter(f =>
+      !alreadyFlagged.some(flagged => f.includes(flagged.slice(0, 30)))
+    ),
+  ];
 
   if (verifiedFacts.length === 0) {
-    return `Return ONLY this exact JSON: {"interject":false,"message":null}`;
+    return `Return ONLY this exact JSON: {"interject":false,"message":null,"flaggedFact":null}`;
   }
 
   const lines = [
     `Return ONLY valid JSON, no markdown:`,
     `{"interject":boolean,"message":string|null,"flaggedFact":string|null}`,
     ``,
+    `CRITICAL: If interject is true, message MUST be a non-null string. Never return interject:true with message:null.`,
+    ``,
     `You are Ruby — Aqua's sister. Sharp, fast, no filter.`,
-    `You speak when an NPC says something that contradicts a verified fact.`,
+    `You speak when an NPC says something that directly contradicts what Aqua knows to be true.`,
     ``,
     `WHAT JUST HAPPENED:`,
     `Aqua said to ${npcName}: "${playerMessage}"`,
     `${npcName} replied: "${npcReply}"`,
     ``,
-    `VERIFIED FACTS — things Aqua has confirmed as true:`,
+    `VERIFIED FACTS — confirmed true:`,
     verifiedFacts.map((f, i) => `${i + 1}. ${f}`).join("\n"),
     ``,
     `INTERJECT ONLY IF:`,
-    `- ${npcName}'s reply directly contradicts one of the numbered facts — clearly and specifically`,
-    `- The contradiction is unambiguous, not just a vague inconsistency`,
-    `- You can name exactly which numbered fact is contradicted`,
+    `- ${npcName}'s reply directly contradicts one of the numbered facts`,
+    `- The contradiction is clear and specific — not vague or a matter of interpretation`,
     ``,
     `DO NOT interject if:`,
-    `- The reply is consistent with all verified facts`,
-    `- The NPC is just evasive, emotional, or unhelpful — not a factual contradiction`,
-    `- You are not certain which fact is contradicted`,
-    `- The exchange was small talk, neutral, or just suspicious without a clear conflict`,
-    `- You would be stretching to make it a contradiction`,
+    `- The reply is consistent with or unrelated to the verified facts`,
+    `- The NPC is just evasive, emotional, or suspicious — not factually wrong`,
+    `- You would be stretching to call it a contradiction`,
     ``,
-    `If you interject: one sharp sentence as Ruby, referencing the specific fact that conflicts.`,
-    `Direct, not preachy. Don't start with "I noticed".`,
-    `flaggedFact: the first 30 characters of the fact number that was contradicted, or null if not interjecting.`,
-    `message: null if not interjecting.`,
+    `If you interject: ONE sharp sentence as Ruby. Don't start with "I noticed".`,
+    `flaggedFact: copy the first 30 characters of the contradicted fact text exactly as a string — NOT the number. Example: if fact 2 is "The camera was offline", flaggedFact should be "The camera was offline".`,
+    `If not interjecting: {"interject":false,"message":null,"flaggedFact":null}`,
   ];
 
   return lines.join("\n").trim();

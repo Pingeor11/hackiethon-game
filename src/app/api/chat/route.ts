@@ -45,7 +45,8 @@ async function callGroqJson<T>(prompt: string, fallback: T): Promise<T> {
       .replace(/^```\s*/i, "")
       .replace(/\s*```$/, "");
     return JSON.parse(cleaned) as T;
-  } catch {
+  } catch (e) {
+    console.log("[callGroqJson parse error]", text.slice(0, 200), e);
     return fallback;
   }
 }
@@ -221,15 +222,8 @@ export async function POST(req: NextRequest) {
       const truthToReveal = (body.worldState.npcs[fulfilledDeal.npcName].truthsKnown ?? [])[fulfilledDeal.truthIndex];
       const isKillerDeal = fulfilledDeal.npcName === body.worldState.killer;
 
-      // For innocent NPCs — show their belief about the killer in the cinematic
-      // rather than their personal secret, since beliefs are directional investigation hints.
-      // For killer NPCs — use their truthsKnown entry as usual.
-      if (!isKillerDeal) {
-        const killerBelief = (body.worldState.npcs[fulfilledDeal.npcName].beliefs ?? {})[body.worldState.killer];
-        dealRevealTruth = killerBelief ?? truthToReveal ?? null;
-      } else {
-        dealRevealTruth = truthToReveal ?? null;
-      }
+      // dealRevealTruth is set after we have the reply — see below
+      dealRevealTruth = truthToReveal ?? null;
 
       replyPrompt = buildDealRevealPrompt(
         npc,
@@ -243,6 +237,14 @@ export async function POST(req: NextRequest) {
     }
 
     const reply = await callGroqText(replyPrompt);
+
+    // For innocent deal reveals — the cinematic shows what the NPC actually said,
+    // which is the vague, unnamed observation the LLM generated from the belief context.
+    // This keeps the cinematic consistent with the conversation and avoids showing
+    // raw belief text that names or points too directly at the killer.
+    if (fulfilledDeal && fulfilledDeal.npcName !== body.worldState.killer) {
+      dealRevealTruth = reply;
+    }
 
     // ── EXTRACTION + RUBY INTERJECTION — run in parallel ─────────────────────
     const fallbackExtraction: ExtractionResult = {
@@ -265,14 +267,20 @@ export async function POST(req: NextRequest) {
     // Ruby only interjects when talking to non-Ruby NPCs
     const shouldCheckRuby = body.npcName !== "Ruby" && !fulfilledDeal;
 
-    // ── Extraction only — Ruby runs client-side after response returns ────────
-    const extraction = await callGroqJson<ExtractionResult>(
-      buildExtractionPrompt(npc, body.playerMessage, reply, body.worldState),
-      fallbackExtraction,
-    );
+    const [extraction, rubyInterjectionResult] = await Promise.all([
+      callGroqJson<ExtractionResult>(
+        buildExtractionPrompt(npc, body.playerMessage, reply, body.worldState),
+        fallbackExtraction,
+      ),
+      shouldCheckRuby
+        ? callGroqJson<{ interject: boolean; message: string | null; flaggedFact: string | null }>(
+            buildRubyInterjectionPrompt(body.npcName, body.playerMessage, reply, body.worldState),
+            { interject: false, message: null, flaggedFact: null },
+          )
+        : Promise.resolve({ interject: false, message: null, flaggedFact: null }),
+    ]);
 
-    // Placeholder — Ruby interjection is now handled by /api/ruby endpoint
-    const rubyInterjectionResult = { interject: false, message: null, flaggedFact: null };
+    console.log("[Ruby]", JSON.stringify(rubyInterjectionResult));
 
     if (fulfilledDeal && dealRevealTruth) {
       extraction.discoveredClue = `[DEAL CONFIRMED] ${fulfilledDeal.npcName}: ${dealRevealTruth}`;
@@ -393,6 +401,12 @@ export async function POST(req: NextRequest) {
         : null,
       dealHint: !fulfilledDeal && gate2FailReason && pendingDealsForNPC.length > 0
         ? gate2FailReason
+        : null,
+      rubyInterjection: (rubyInterjectionResult?.interject && rubyInterjectionResult?.message)
+        ? rubyInterjectionResult.message
+        : null,
+      rubyFlaggedFact: (rubyInterjectionResult?.interject && rubyInterjectionResult?.flaggedFact)
+        ? rubyInterjectionResult.flaggedFact
         : null,
     });
 
