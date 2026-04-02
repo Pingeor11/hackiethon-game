@@ -45,8 +45,7 @@ async function callGroqJson<T>(prompt: string, fallback: T): Promise<T> {
       .replace(/^```\s*/i, "")
       .replace(/\s*```$/, "");
     return JSON.parse(cleaned) as T;
-  } catch (e) {
-    console.log("[callGroqJson parse error]", text.slice(0, 200), e);
+  } catch {
     return fallback;
   }
 }
@@ -280,7 +279,6 @@ export async function POST(req: NextRequest) {
         : Promise.resolve({ interject: false, message: null, flaggedFact: null }),
     ]);
 
-    console.log("[Ruby]", JSON.stringify(rubyInterjectionResult));
 
     if (fulfilledDeal && dealRevealTruth) {
       extraction.discoveredClue = `[DEAL CONFIRMED] ${fulfilledDeal.npcName}: ${dealRevealTruth}`;
@@ -355,14 +353,20 @@ export async function POST(req: NextRequest) {
       (t: string) => !npcAfter.revealedClues.some((c: string) => c.includes(t.slice(0, 20)))
     );
 
+    const playerAskedForDeal = /\b(deal|trade|exchange|tell me.*if i|i'll.*if you|what.*would it take|information.*exchange|swap)\b/i.test(body.playerMessage);
+
     let barterOffer = null;
     const existingDeal = (updatedWorldState.activeDeals ?? []).find(
       (d: ActiveDeal) => d.npcName === body.npcName && d.status === "pending"
     );
 
-    if (!existingDeal && !fulfilledDeal && unrevealedTruths.length > 0 && Math.random() < 0.35) {
+    const shouldOfferDeal = !existingDeal && !fulfilledDeal && unrevealedTruths.length > 0 &&
+      (playerAskedForDeal || Math.random() < 0.35);
+
+    if (shouldOfferDeal) {
       const def = dealDefinitions[body.npcName];
-      if (def && npcAfter.trustPlayer >= def.minTrust && npcAfter.suspicionPlayer < 0.65) {
+      const trustThreshold = playerAskedForDeal ? def.minTrust - 0.1 : def.minTrust;
+      if (def && npcAfter.trustPlayer >= trustThreshold && npcAfter.suspicionPlayer < 0.65) {
         const truthIndex = (npcAfter.truthsKnown ?? []).indexOf(unrevealedTruths[0]);
         if (!updatedWorldState.activeDeals) updatedWorldState.activeDeals = [];
         updatedWorldState.activeDeals.push({
