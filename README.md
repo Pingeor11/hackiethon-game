@@ -1,4 +1,4 @@
-# ✦ AI☆no☆Ko — A retro AI murder mystery investigation game built with Next.js for Melbourne Hackiethon 2026 (Theme: Integrate AI into a Game).
+# AI☆no☆Ko — A retro AI murder mystery investigation game built with Next.js for Melbourne Hackiethon 2026 (Theme: Integrate AI into a Game).
 
 > *In a world built entirely on lies and constructed identities — AI fits in perfectly.*
 
