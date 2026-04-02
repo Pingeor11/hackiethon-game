@@ -261,9 +261,11 @@ export function buildNPCPrompt(npc: NPCState, world: WorldState, playerMessage: 
       `You are not panicking — but you are more careful now. Specifically:`,
       `- Your answers are slightly shorter than they would normally be`,
       `- You weigh your words more carefully before answering`,
+      `- Every word is chosen, you might even ask a question back to Aqua`,
       `- You might reference that you've heard Aqua has been talking to people`,
       `- You protect yourself without shutting down — there's a difference between guarded and silent`,
       `- You still talk. You still have things to say. You're just watching more carefully.`,
+      "- volunteer nothing, only respond to what was directly asked"
     ].join("\n") : ``,
 
     ``,

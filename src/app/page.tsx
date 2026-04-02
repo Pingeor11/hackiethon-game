@@ -509,7 +509,9 @@ export default function HomePage() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const chatLogRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const emotionalAudioRef = useRef<HTMLAudioElement | null>(null);
   const [musicMuted, setMusicMuted] = useState(false);
+  const crossfadeRef = useRef<number | null>(null);
   const sfxRefs = useRef<Record<string, HTMLAudioElement>>({});
   const notebookOpenRef = useRef(false);
 
@@ -560,15 +562,75 @@ export default function HomePage() {
     };
   }, []);
 
-  // Mute/unmute
+  // Mute/unmute both tracks
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = musicMuted;
+    if (emotionalAudioRef.current) emotionalAudioRef.current.muted = musicMuted;
   }, [musicMuted]);
 
-  // Lower volume during confrontation, restore after
+  // Crossfade between idol and emotional based on tension
+  useEffect(() => {
+    const tension = worldState?.tension ?? 0;
+    const idol = audioRef.current;
+    const emotional = emotionalAudioRef.current;
+    if (!idol || !emotional) return;
+    if (confrontation) return;
+
+    const shouldBeEmotional = tension >= 6;
+    const alreadyEmotional = emotional.volume > 0.1 && !emotional.paused;
+    const alreadyIdol = idol.volume > 0.1;
+
+    // Don't restart a crossfade that's already in the right state
+    if (shouldBeEmotional && alreadyEmotional && !alreadyIdol) return;
+    if (!shouldBeEmotional && alreadyIdol && emotional.paused) return;
+
+    if (crossfadeRef.current) clearInterval(crossfadeRef.current);
+
+    if (shouldBeEmotional) {
+      if (emotional.paused) { emotional.volume = 0; emotional.play().catch(() => {}); }
+      const steps = 30;
+      let step = 0;
+      crossfadeRef.current = window.setInterval(() => {
+        step++;
+        idol.volume = Math.max(0, 0.35 * (1 - step / steps));
+        emotional.volume = Math.min(0.5, 0.5 * (step / steps));
+        if (step >= steps) clearInterval(crossfadeRef.current!);
+      }, 50);
+    } else {
+      // Only fade back if emotional is actually playing
+      if (emotional.paused) {
+        idol.volume = 0.35;
+        return;
+      }
+      const emotionalStart = emotional.volume;
+      const idolStart = idol.volume;
+      const steps = 30;
+      let step = 0;
+      crossfadeRef.current = window.setInterval(() => {
+        step++;
+        emotional.volume = Math.max(0, emotionalStart * (1 - step / steps));
+        idol.volume = Math.min(0.35, idolStart + (0.35 - idolStart) * (step / steps));
+        if (step >= steps) {
+          clearInterval(crossfadeRef.current!);
+          emotional.pause();
+          emotional.currentTime = 0;
+        }
+      }, 50);
+    }
+  }, [worldState?.tension, confrontation]);
+
+  // Lower both volumes during confrontation, restore after
   useEffect(() => {
     if (!audioRef.current) return;
-    audioRef.current.volume = confrontation ? 0.08 : 0.35;
+    if (confrontation) {
+      audioRef.current.volume = 0.08;
+      if (emotionalAudioRef.current) emotionalAudioRef.current.volume = 0.08;
+    } else {
+      // Restore correct volumes based on tension
+      const tension = worldState?.tension ?? 0;
+      audioRef.current.volume = tension >= 6 ? 0 : 0.35;
+      if (emotionalAudioRef.current) emotionalAudioRef.current.volume = tension >= 6 ? 0.5 : 0;
+    }
   }, [confrontation]);
 
   useEffect(() => {
@@ -918,7 +980,7 @@ export default function HomePage() {
         <div style={{ fontSize:"36px", color:"#f472b6", animation:"pulse-glow 2s ease-in-out infinite", animationDelay:"0.5s", opacity:0, animationFillMode:"forwards" }}>★</div>
         <div style={{display:"flex",flexDirection:"column",gap:"20px",width:"100%"}}>
           {[
-            { text:"AI HOSHINO HAS BEEN FOUND DEAD", delay:"0.3s", color:"#f0e8ff", size:"10px" },
+            { text:"FAMOUS IDOL AI HOSHINO HAS BEEN FOUND DEAD", delay:"0.3s", color:"#f0e8ff", size:"10px" },
             { text:"AT THE FRONT OF THE HOUSE.", delay:"1s", color:"#f0e8ff", size:"10px" },
             { text:"ON THE DAY SHE WOULD PERFORM AT TOKYO DOME.", delay:"1.8s", color:"#c084fc", size:"9px" },
           ].map((l, i) => (
@@ -956,6 +1018,7 @@ export default function HomePage() {
 
       {/* ── Background music ── */}
       <audio ref={audioRef} src="/audio/idolmusic.mp3" loop preload="auto" style={{ display: "none" }} />
+      <audio ref={emotionalAudioRef} src="/audio/emotional.mp3" loop preload="auto" style={{ display: "none" }} />
 
       {/* ── Sound effects ── */}
       <audio ref={el => { if (el) sfxRefs.current["chime"] = el; }} src="/audio/chimesound.mp3" preload="auto" style={{ display: "none" }} />
@@ -996,7 +1059,7 @@ export default function HomePage() {
           <span className="chip"><span className="chip-icon">♡</span>AQUA</span>
           <span className="chip dim">MAIN STAGE</span>
           <span className="chip">TRN <em>{worldState.turn}</em></span>
-          <span className={`chip ${worldState.tension >= 7 ? "hot" : ""}`}>TNS <em>{worldState.tension}</em></span>
+          <span className={`chip ${worldState.tension >= 6 ? "hot" : ""}`}>TNS <em>{worldState.tension}</em></span>
           {pendingDeals.length > 0 && (
             <span className="chip deal-chip">❖ {pendingDeals.length} DEAL{pendingDeals.length > 1 ? "S" : ""}</span>
           )}
@@ -1564,6 +1627,16 @@ export default function HomePage() {
                 setMessages(initialMessages);
                 setPlayerPos({ x: 530, y: 470 });
                 setFacing("right");
+                // Reset NPC positions
+                npcPosRef.current = { ...NPC_INITIAL_POSITIONS };
+                Object.keys(NPC_INITIAL_POSITIONS).forEach(k => {
+                  npcTargets.current[k as NPCName] = { ...NPC_INITIAL_POSITIONS[k as NPCName] };
+                  npcPauseUntil.current[k as NPCName] = 0;
+                });
+                activeGossipPairs.current = {};
+                gossipLastTime.current = {};
+                setNpcPositions({ ...NPC_INITIAL_POSITIONS });
+                setGossipBubbles({});
               }}
               style={{
                 fontFamily: "'Press Start 2P',monospace", fontSize: "8px",
