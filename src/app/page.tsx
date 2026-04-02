@@ -44,14 +44,20 @@ const npcSpriteMap: Record<NPCName, string> = {
   Ruby: "/sprites/ruby.png",
 };
 
-const npcPositions: Record<NPCName, { x: number; y: number }> = {
-  Director: { x: 1320, y: 530 },
-  Fan: { x: 1200, y: 735 },
-  Manager: { x: 385, y: 500 },
-  Executive: { x: 430, y: 500 },
-  CoIdol: { x: 520, y: 650 },
-  Ruby: { x: 720, y: 600 },
+const NPC_INITIAL_POSITIONS: Record<NPCName, { x: number; y: number }> = {
+  Director:  { x: 1320, y: 530 },
+  Fan:       { x: 1200, y: 600 },
+  Manager:   { x: 385,  y: 500 },
+  Executive: { x: 500,  y: 560 },
+  CoIdol:    { x: 650,  y: 620 },
+  Ruby:      { x: 750,  y: 540 },
 };
+
+const NPC_SPEED = 1.2;
+const NPC_PAUSE_MIN = 1500;
+const NPC_PAUSE_MAX = 4000;
+const GOSSIP_DISTANCE = 80;
+const GOSSIP_COOLDOWN = 12000; // ms between gossip events per pair
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -476,6 +482,7 @@ export default function HomePage() {
   const [typingNPC, setTypingNPC] = useState<NPCName | null>(null);
   const [notebookOpen, setNotebookOpen] = useState(false);
   useEffect(() => { notebookOpenRef.current = notebookOpen; }, [notebookOpen]);
+  useEffect(() => { selectedNPCRef.current = selectedNPC; }, [selectedNPC]);
   const [elicitationToast, setElicitationToast] = useState<string | null>(null);
   const [barterOffer, setBarterOffer] = useState<{
     npcName: string; offer: string; asking: string;
@@ -505,6 +512,28 @@ export default function HomePage() {
   const [musicMuted, setMusicMuted] = useState(false);
   const sfxRefs = useRef<Record<string, HTMLAudioElement>>({});
   const notebookOpenRef = useRef(false);
+
+  // ── NPC wandering state ────────────────────────────────────────────────────
+  const [npcPositions, setNpcPositions] = useState<Record<NPCName, { x: number; y: number }>>(
+    { ...NPC_INITIAL_POSITIONS }
+  );
+  const npcPosRef = useRef<Record<NPCName, { x: number; y: number }>>({ ...NPC_INITIAL_POSITIONS });
+  const npcTargets = useRef<Record<NPCName, { x: number; y: number }>>({ ...NPC_INITIAL_POSITIONS });
+  const npcPauseUntil = useRef<Record<NPCName, number>>(
+    Object.fromEntries(Object.keys(NPC_INITIAL_POSITIONS).map(k => [k, 0])) as Record<NPCName, number>
+  );
+  const [gossipBubbles, setGossipBubbles] = useState<Record<string, string>>({});
+  const gossipLastTime = useRef<Record<string, number>>({});
+  const activeGossipPairs = useRef<Record<string, number>>({});
+  const GOSSIP_FREEZE_DURATION = 5000;
+  const selectedNPCRef = useRef<NPCName | null>(null);
+
+  function pickNewTarget(npcName: NPCName) {
+    npcTargets.current[npcName] = {
+      x: WALK_MIN_X + Math.random() * (WALK_MAX_X - WALK_MIN_X),
+      y: WALK_MIN_Y + Math.random() * (WALK_MAX_Y - WALK_MIN_Y),
+    };
+  }
 
   function playSound(name: string) {
     const audio = sfxRefs.current[name];
@@ -589,7 +618,7 @@ export default function HomePage() {
       if (d <= TALK_DISTANCE && d < bestDist) { best = npcName; bestDist = d; }
     }
     return best;
-  }, [worldState, npcList, playerPos]);
+  }, [worldState, npcList, playerPos, npcPositions]);
 
   const activeNPC = selectedNPC ? worldState?.npcs[selectedNPC] : null;
 
@@ -618,8 +647,13 @@ export default function HomePage() {
   }, [nearbyNPC, selectedNPC]);
 
   useEffect(() => {
+    let frameCount = 0;
     function tick() {
-      if (!selectedNPC && !worldState?.gameOver) {
+      const now = Date.now();
+      frameCount++;
+
+      // ── Aqua movement ──────────────────────────────────────────────────────
+      if (!selectedNPCRef.current && !worldState?.gameOver) {
         setPlayerPos((prev) => {
           let nx = prev.x, ny = prev.y;
           if (pressedKeys.current.has("ArrowLeft") || pressedKeys.current.has("a") || pressedKeys.current.has("A")) { nx -= MOVE_SPEED; setFacing("left"); }
@@ -629,11 +663,94 @@ export default function HomePage() {
           return { x: clamp(nx, WALK_MIN_X, WALK_MAX_X), y: clamp(ny, WALK_MIN_Y, WALK_MAX_Y) };
         });
       }
+
+      // ── NPC movement — purely ref-based, no stale closure ─────────────────
+      const pos = npcPosRef.current;
+      const names = Object.keys(pos) as NPCName[];
+
+      for (const name of names) {
+        if (name === selectedNPCRef.current) continue;
+        const inGossip = Object.entries(activeGossipPairs.current).some(
+          ([key, until]) => key.includes(name) && now < until
+        );
+        if (inGossip) continue;
+        if (now < npcPauseUntil.current[name]) continue;
+
+        const cur = pos[name];
+        const target = npcTargets.current[name];
+        const dx = target.x - cur.x;
+        const dy = target.y - cur.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < NPC_SPEED + 1) {
+          pos[name] = { ...target };
+          npcPauseUntil.current[name] = now + NPC_PAUSE_MIN + Math.random() * (NPC_PAUSE_MAX - NPC_PAUSE_MIN);
+          pickNewTarget(name);
+        } else {
+          pos[name] = {
+            x: cur.x + (dx / dist) * NPC_SPEED,
+            y: cur.y + (dy / dist) * NPC_SPEED,
+          };
+        }
+      }
+
+      // ── Gossip detection ───────────────────────────────────────────────────
+      for (let i = 0; i < names.length; i++) {
+        for (let j = i + 1; j < names.length; j++) {
+          const a = names[i], b = names[j];
+          if (a === selectedNPCRef.current || b === selectedNPCRef.current) continue;
+          const d = distance(pos[a], pos[b]);
+          if (d > 40) continue; // must be right next to each other
+          const pairKey = [a, b].sort().join("-");
+          const lastTime = gossipLastTime.current[pairKey] ?? 0;
+          if (now - lastTime < GOSSIP_COOLDOWN) continue;
+          if (Math.random() > 0.008) continue; // ~0.8% chance per frame when close — fires occasionally
+          gossipLastTime.current[pairKey] = now;
+          activeGossipPairs.current[pairKey] = now + GOSSIP_FREEZE_DURATION;
+
+          // Snap them right next to each other at their midpoint
+          const midX = (pos[a].x + pos[b].x) / 2;
+          const midY = (pos[a].y + pos[b].y) / 2;
+          pos[a] = { x: midX - 16, y: midY };
+          pos[b] = { x: midX + 16, y: midY };
+          npcTargets.current[a] = { ...pos[a] };
+          npcTargets.current[b] = { ...pos[b] };
+
+          setGossipBubbles(gb => ({ ...gb, [a]: "...", [b]: "..." }));
+          setTimeout(() => {
+            setGossipBubbles(gb => { const n = { ...gb }; delete n[a]; delete n[b]; return n; });
+            pickNewTarget(a);
+            pickNewTarget(b);
+          }, GOSSIP_FREEZE_DURATION);
+
+          setWorldState(ws => {
+            if (!ws) return ws;
+            const pool = [...(ws.npcs[a].rumorsHeard ?? []), ...(ws.npcs[b].rumorsHeard ?? [])];
+            if (pool.length === 0) return ws;
+            const rumor = pool[Math.floor(Math.random() * pool.length)];
+            const short = rumor.length > 40 ? rumor.slice(0, 40) + "…" : rumor;
+            const next = JSON.parse(JSON.stringify(ws));
+            if (!next.npcs[b].rumorsHeard.includes(rumor)) next.npcs[b].rumorsHeard.push(rumor);
+            if (!next.npcs[a].rumorsHeard.includes(rumor)) next.npcs[a].rumorsHeard.push(rumor);
+            if (next.npcs[a].rumorsHeard.length > 5) next.npcs[a].rumorsHeard = next.npcs[a].rumorsHeard.slice(-5);
+            if (next.npcs[b].rumorsHeard.length > 5) next.npcs[b].rumorsHeard = next.npcs[b].rumorsHeard.slice(-5);
+            setBackchannelToast({ from: a, to: b, message: short });
+            setTimeout(() => setBackchannelToast(null), 5000);
+            return next;
+          });
+        }
+      }
+
+      // ── Sync ref to state every 3 frames for rendering ─────────────────────
+      if (frameCount % 3 === 0) {
+        setNpcPositions({ ...npcPosRef.current });
+      }
+
       rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [selectedNPC, worldState?.gameOver]);
+  }, [worldState?.gameOver]);
 
   async function typeNPCMessage(npcName: NPCName, fullText: string) {
     setTypingNPC(npcName);
@@ -924,6 +1041,7 @@ export default function HomePage() {
             const isNearby = nearbyNPC === npcName;
             const isLarge = npcName === "Director" || npcName === "Manager" || npcName === "Executive";
             const hasPendingDeal = pendingDeals.some(d => d.npcName === npcName);
+            const gossipText = gossipBubbles[npcName];
             return (
               <button
                 key={npcName}
@@ -935,6 +1053,20 @@ export default function HomePage() {
                 {isNearby && <div className="name-tag">▲ {npcName}{hasPendingDeal ? " ❖" : ""}</div>}
                 {hasPendingDeal && !isNearby && (
                   <div className="deal-indicator">❖</div>
+                )}
+                {gossipText && (
+                  <div style={{
+                    position: "absolute", bottom: "calc(100% + 4px)", left: "50%",
+                    transform: "translateX(-50%)",
+                    background: "rgba(10,4,20,0.95)", border: "1px solid #f472b644",
+                    padding: "4px 10px", whiteSpace: "nowrap", pointerEvents: "none",
+                    fontFamily: "'Press Start 2P', monospace", fontSize: "8px",
+                    color: "#f472b699",
+                    animation: "blink 1.2s step-end infinite",
+                    borderRadius: "4px",
+                  }}>
+                    •••
+                  </div>
                 )}
               </button>
             );
