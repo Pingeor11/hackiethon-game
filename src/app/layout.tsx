@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Oshi no Ko — Investigation",
+  title: "AI no Ko — Investigation",
   description: "AI murder mystery",
 };
 
