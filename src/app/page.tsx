@@ -1664,7 +1664,7 @@ export default function HomePage() {
         .vignette { position:fixed; inset:0; z-index:901; pointer-events:none; background:radial-gradient(ellipse at center,transparent 50%,rgba(8,2,16,0.72) 100%); }
 
         /* HUD */
-        .hud { flex:0 0 38px; height:38px; display:flex; justify-content:space-between; align-items:center; padding:0 14px; background:#0d0514; border-bottom:2px solid #4a1060; gap:10px; overflow:hidden; z-index:10; }
+        .hud { flex:0 0 38px; height:48px; display:flex; justify-content:space-between; align-items:center; padding:0 14px; background:#0d0514; border-bottom:2px solid #4a1060; gap:10px; overflow:hidden; z-index:10; }
         .hud-left,.hud-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
         .hud-logo { font-family:'Press Start 2P',monospace; font-size:9px; color:#f472b6; letter-spacing:0.2em; text-shadow:0 0 12px #f472b677; }
         .hud-logo span { color:#e879f9; }
@@ -1679,7 +1679,7 @@ export default function HomePage() {
         .chip.deal-chip { color:#f472b6; border-color:#f472b644; background:#1c0535; animation:pulse-deal 2s ease-in-out infinite; }
         @keyframes pulse-deal { 0%,100%{border-color:#f472b644}50%{border-color:#f472b6aa} }
         .key-hint { display:flex; align-items:center; gap:4px; }
-        .hud-right span { font-size:13px; color:#5a2870; }
+        .hud-right span { font-size:13px; color:#F5BB27; }
         kbd { font-family:'Press Start 2P',monospace; font-size:6px; padding:2px 5px; border:1px solid #3a1050; background:#180a22; color:#e879f9; }
 
         /* Scene */
