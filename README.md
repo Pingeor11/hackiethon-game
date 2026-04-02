@@ -49,7 +49,7 @@ Information is currency. Ask an NPC for a deal and they'll propose a trade: they
 Press `N` to open your investigation notes — scene clues, the method of murder, active and completed deals, confirmed truths earned through deals, and a relationship map showing the power dynamics between suspects. The notes builds up gradually as you uncover connections.
 
 ### Tension System
-As the investigation heats up, tension rises where contradictions found, meaningful clues surfaced, and the passage of time all contribute. At high tension, NPCs become noticeably more guarded: shorter answers, deflecting questions, treating anything suspicious like a trap. The music also shifts from a calm idol track crossfades into a more dramatic score as pressure builds. You must decide a suspect to kill before the system turns against you.
+As the investigation heats up, tension rises where contradictions found, meaningful clues surfaced, and the passage of time all contribute. At high tension, NPCs become noticeably more guarded: shorter answers, deflecting questions, treating anything suspicious like a trap. The music also shifts from a calm idol track into a more dramatic score as pressure builds. You must decide on a suspect to kill before the system turns against you.
 
 ---
 
