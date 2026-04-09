@@ -4,7 +4,7 @@
 
 🔗 **[Play it live → ai-no-ko-game.vercel.app](https://ai-no-ko-game.vercel.app/)**
 
-A murder mystery investigation game set in the world of [Oshi no Ko](https://en.wikipedia.org/wiki/Oshi_no_Ko) where idols, directors, and managers are all playing a role, relationships run on power and hidden motives, and nothing is ever quite what it seems. Sounds like LinkedIn.
+A murder mystery investigation game set in the world of [Oshi no Ko](https://en.wikipedia.org/wiki/Oshi_no_Ko) where idols, directors, and managers are all playing a role, relationships run on power and hidden motives, and nothing is ever quite what it seems. Sounds just like LinkedIn.
 
 **Ai Hoshino has been murdered.** You play as Aqua, her son, working your way through a web of suspects to find out and kill who did it.
  
