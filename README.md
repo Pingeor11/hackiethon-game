@@ -1,6 +1,6 @@
 # AI☆no☆Ko — A retro AI murder mystery investigation game built with Next.js for Melbourne Hackiethon 2026 (Theme: Integrate AI into a Game).
 
-> *In a world built entirely on lies and constructed identities — AI fits in perfectly.*
+> *In a world built entirely on lies and constructed identities, AI fits in perfectly ;\)*
 
 🔗 **[Play it live → ai-no-ko-game.vercel.app](https://ai-no-ko-game.vercel.app/)**
 
